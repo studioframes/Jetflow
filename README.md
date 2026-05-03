@@ -1,12 +1,12 @@
-# JetFlow
+# Jetflow
 
-JetFlow is a browser-based styling engine that combines readable CSS-like syntax with utility-driven speed. It allows you to build modern interfaces without writing traditional CSS files while keeping the syntax intuitive.
+Jetflow is a browser-based styling engine that combines readable CSS-like syntax with utility-driven speed. It allows you to build modern interfaces without writing traditional CSS files while keeping the syntax intuitive.
 
 <img width="1280" height="640" alt="Frame 1 (8)" src="https://github.com/user-attachments/assets/ee570d24-b1cf-472a-b577-18f37ebf972a" />
 
 ## Overview
 
-JetFlow is designed to bridge the gap between traditional CSS and utility-first systems. It provides a unified approach where you can use semantic classes, atomic utilities, and CSS-like values together in a single workflow.
+Jetflow is designed to bridge the gap between traditional CSS and utility-first systems. It provides a unified approach where you can use semantic classes, atomic utilities, and CSS-like values together in a single workflow.
 
 ## Features
 
