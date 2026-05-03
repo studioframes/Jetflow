@@ -20,7 +20,7 @@ JetFlow is designed to bridge the gap between traditional CSS and utility-first 
 
 Include the compiled file in your project:
 ```html
-<script src="[https://cdn.jsdelivr.net/gh/YOUR_USERNAME/YOUR_REPO@v1.0.0/dist/jetflow.min.js](https://cdn.jsdelivr.net/gh/JetflowJS/Jetflow@v0.1.0/jetflow.min.js)"></script>
+<script src="https://cdn.jsdelivr.net/gh/JetflowJS/Jetflow@v0.1.0/jetflow.min.js"></script>
 ```
 
 ## Basic Usage
