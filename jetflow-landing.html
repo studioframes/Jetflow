@@ -1,0 +1,2584 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jetflow — Utility-First CSS</title>
+  <meta name="description"
+    content="A browser-native, utility-first CSS framework. Drop in one script tag. No build step." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,300;1,6..72,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/gh/JetflowJS/Jetflow@v0.1.0/jetflow.min.js"></script>
+  <style>
+    /* ─── Variables ───────────────────────────────────────────────── */
+    :root {
+      --bg: #ffffff;
+      --bg-2: #f7f7f7;
+      --bg-3: #efefef;
+      --surface: #ffffff;
+      --border: #e2e2e2;
+      --border-2: #c4c4c4;
+      --text: #0a0a0a;
+      --text-2: #525252;
+      --text-3: #6a6a6a;
+      --green: #FF5F15;
+      --green-hover: #db5314;
+      --green-pale: rgb(255, 95, 21, 0.08);
+      --green-text: #FF5F15;
+      --code-bg: #f1f1f1;
+      --code-border: #cdcdcd;
+      --t: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+      --ff-display: 'Newsreader', Georgia, serif;
+      --ff-body: 'Inter', system-ui, sans-serif;
+      --ff-mono: 'JetBrains Mono', monospace;
+      --nav-bg: rgba(255, 255, 255, 0.75);
+    }
+
+    [data-theme="dark"] {
+      --bg: rgb(8, 8, 8);
+      --bg-2: #111111;
+      --bg-3: #1c1c1c;
+      --surface: #0f0f0f;
+      --border: #1e1e1e;
+      --border-2: #303030;
+      --text: #f0f0f0;
+      --text-2: #888888;
+      --text-3: #444444;
+      --green: #FF5F15;
+      --green-hover: #db5314;
+      --green-pale: rgb(255, 95, 21, 0.08);
+      --green-text: #FF5F15;
+      --code-bg: #050505;
+      --code-border: #161616;
+      --nav-bg: rgba(8, 8, 8, 0.75);
+    }
+
+    /* ─── Reset ───────────────────────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--ff-body);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      transition: background var(--t), color var(--t);
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-family: inherit;
+    }
+
+    input,
+    select,
+    textarea {
+      font-family: inherit;
+    }
+
+    ::selection {
+      background: var(--green);
+      color: #fff;
+    }
+
+    /* ─── Nav ─────────────────────────────────────────────────────── */
+    #nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      background: var(--nav-bg);
+      display: flex;
+      align-items: center;
+      transition: background var(--t), border-color var(--t);
+      backdrop-filter: url('#wave-filter');
+    }
+
+    .nav-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-family: var(--ff-display);
+      font-size: 24px;
+      letter-spacing: -0.3px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .nav-logo-mark {
+      width: 26px;
+      height: 26px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: baseline;
+    }
+
+    .nav-logo-mark svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      list-style: none;
+    }
+
+    @media (max-width: 640px) {
+      .nav-links {
+        display: none;
+      }
+    }
+
+    .nav-links a {
+      font-size: 13.5px;
+      font-weight: 400;
+      color: var(--text-2);
+      transition: color var(--t);
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+    }
+
+    .nav-links a.ext::after {
+      content: ' ↗';
+      font-size: 11px;
+      opacity: 0.6;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-version {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--text-3);
+      letter-spacing: 0.02em;
+    }
+
+    .theme-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-2);
+      transition: all var(--t);
+    }
+
+    .theme-btn:hover {
+      border-color: var(--border-2);
+      color: var(--text);
+    }
+
+    .theme-btn svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+    }
+
+    .nav-mobile-btn {
+      display: none;
+      width: 32px;
+      height: 32px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-2);
+      color: var(--text-2);
+    }
+
+    @media (max-width: 640px) {
+      .nav-mobile-btn {
+        display: flex;
+      }
+    }
+
+    .nav-mobile-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+    }
+
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 56px;
+      left: 0;
+      right: 0;
+      z-index: 99;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .mobile-menu.open {
+      display: flex;
+    }
+
+    .mobile-menu a {
+      font-size: 14px;
+      color: var(--text-2);
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      transition: color var(--t);
+    }
+
+    .mobile-menu a:last-child {
+      border: none;
+    }
+
+    .mobile-menu a:hover {
+      color: var(--text);
+    }
+
+    /* ─── Sections shared ─────────────────────────────────────────── */
+    .section {
+      padding: 96px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-3);
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-weight: 400;
+      font-size: clamp(2.2rem, 5vw, 3.5rem);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      font-size: 15px;
+      color: var(--text-2);
+      max-width: 480px;
+      line-height: 1.75;
+    }
+
+    .section-head {
+      margin-bottom: 56px;
+    }
+
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ─── Reveal ──────────────────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.55s ease, transform 0.55s ease;
+    }
+
+    .reveal.in {
+      opacity: 1;
+      transform: none;
+    }
+
+    .reveal.d1 {
+      transition-delay: 0.08s;
+    }
+
+    .reveal.d2 {
+      transition-delay: 0.16s;
+    }
+
+    .reveal.d3 {
+      transition-delay: 0.24s;
+    }
+
+    .reveal.d4 {
+      transition-delay: 0.32s;
+    }
+
+    /* ─── Hero ────────────────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 0 24px 80px;
+      max-width: 1200px;
+      margin: 0 auto;
+      border-right: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+    }
+
+    /* Full-bleed side borders */
+    #hero-wrap {
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+
+    @media (max-width: 900px) {
+      #hero-wrap {
+        border: none;
+      }
+    }
+
+    .hero-eyebrow {
+      font-family: var(--ff-mono);
+      font-size: 11.5px;
+      color: var(--text-3);
+      letter-spacing: 0.08em;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hero-eyebrow-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.3
+      }
+    }
+
+    .hero-h1 {
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-weight: 300;
+      font-size: clamp(4.5rem, 13vw, 10.5rem);
+      line-height: 0.93;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 40px;
+    }
+
+    .hero-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 48px;
+      flex-wrap: wrap;
+      padding-top: 16px;
+      padding-bottom: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .hero-desc {
+      font-size: 15px;
+      color: var(--text-2);
+      max-width: 380px;
+      line-height: 1.75;
+      flex: 1;
+      min-width: 240px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .hero-btns {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-green {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      background: var(--green);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      transition: all var(--t);
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .btn-green:hover {
+      background: var(--green-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-green:active {
+      transform: scale(0.98);
+    }
+
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      background: transparent;
+      color: var(--text);
+      font-size: 13.5px;
+      font-weight: 400;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: all var(--t);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--border-2);
+      background: var(--bg-2);
+      transform: translateY(-1px);
+    }
+
+    .btn-outline:active {
+      transform: scale(0.98);
+    }
+
+    .hero-cmd {
+      font-family: var(--ff-mono);
+      font-size: 14px;
+      color: var(--text-2);
+      letter-spacing: 0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hero-cmd-copy {
+      font-size: 10px;
+      color: var(--text-3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+      transition: all var(--t);
+    }
+
+    .hero-cmd-copy:hover {
+      color: var(--text-2);
+      border-color: var(--border-2);
+    }
+
+    /* ─── Features (Three pillars) ────────────────────────────────── */
+    #features {
+      border-top: 1px solid var(--border);
+    }
+
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border: 1px solid var(--border);
+      border-radius: 8px 8px 0 0;
+    }
+
+    @media (max-width: 768px) {
+      .pillars {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .pillar {
+      padding: 40px 36px;
+      border-right: 1px solid var(--border);
+      transition: background var(--t);
+    }
+
+    .pillar:last-child {
+      border-right: none;
+    }
+
+    @media (max-width: 768px) {
+      .pillar {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .pillar:last-child {
+        border-bottom: none;
+      }
+    }
+
+    .pillar:hover {
+      background: var(--bg-2);
+    }
+
+    .pillar-num {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--green-text);
+      letter-spacing: 0.1em;
+      margin-bottom: 24px;
+    }
+
+    .pillar-title {
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+
+    .pillar-desc {
+      font-size: 13.5px;
+      color: var(--text-2);
+      line-height: 1.7;
+    }
+
+    .pillar-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 20px;
+    }
+
+    .ptag {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--bg-3);
+      color: var(--text-3);
+      border: 1px solid var(--border);
+    }
+
+    /* Feature grid below pillars */
+    .feat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+    }
+
+    @media (max-width: 768px) {
+      .feat-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .feat-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feat-item {
+      padding: 28px 30px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      transition: background var(--t);
+    }
+
+    .feat-item:hover {
+      background: var(--bg-2);
+    }
+
+    .feat-item:nth-child(3n) {
+      border-right: none;
+    }
+
+    @media (max-width: 768px) {
+      .feat-item:nth-child(2n) {
+        border-right: none;
+      }
+
+      .feat-item:nth-child(3n) {
+        border-right: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .feat-item {
+        border-right: none;
+      }
+    }
+
+    .feat-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .feat-desc {
+      font-size: 12.5px;
+      color: var(--text-2);
+      line-height: 1.65;
+    }
+
+    .feat-cls {
+      font-family: var(--ff-mono);
+      font-size: 10.5px;
+      color: var(--green-text);
+      margin-top: 8px;
+    }
+
+    /* ─── Code Showcase ───────────────────────────────────────────── */
+    #code {
+      border-top: 1px solid var(--border);
+    }
+
+    .code-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+
+    @media (max-width: 860px) {
+      .code-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .code-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      width: fit-content;
+    }
+
+    .ctab {
+      font-family: var(--ff-mono);
+      font-size: 11.5px;
+      padding: 7px 14px;
+      color: var(--text-3);
+      border-right: 1px solid var(--border);
+      background: var(--bg-2);
+      transition: all var(--t);
+    }
+
+    .ctab:last-child {
+      border-right: none;
+    }
+
+    .ctab.active {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .ctab:hover:not(.active) {
+      color: var(--text-2);
+    }
+
+    .code-frame {
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--code-border);
+      background: var(--code-bg);
+    }
+
+    .code-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--code-border);
+    }
+
+    .cdot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .cdot-r {
+      background: #ff5f57;
+    }
+
+    .cdot-y {
+      background: #ffbd2e;
+    }
+
+    .cdot-g {
+      background: #28ca41;
+    }
+
+    .code-fn {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: #444;
+      margin-left: 6px;
+    }
+
+    .code-body {
+      padding: 20px;
+      font-family: var(--ff-mono);
+      font-size: 13px;
+      line-height: 1.85;
+      color: #888;
+      overflow-x: auto;
+      display: none;
+    }
+
+    .code-body.active {
+      display: block;
+    }
+
+    .ct {
+      color: #5c9ee5;
+    }
+
+    /* tag */
+    .ca {
+      color: #a78bfa;
+    }
+
+    /* attr */
+    .cs {
+      color: var(--green);
+    }
+
+    /* string / value */
+    .cc {
+      color: #444;
+      font-style: italic;
+    }
+
+    /* comment */
+    .ck {
+      color: #e879f9;
+    }
+
+    /* keyword */
+    .cn {
+      color: #fb923c;
+    }
+
+    /* number */
+
+    /* Right side info */
+    .code-info {
+      padding-top: 8px;
+    }
+
+    .code-info-title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+
+    .code-info-desc {
+      font-size: 13.5px;
+      color: var(--text-2);
+      line-height: 1.75;
+      margin-bottom: 24px;
+    }
+
+    .code-facts {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .code-fact {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-2);
+    }
+
+    .code-fact-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: var(--green-text);
+    }
+
+    .code-fact-icon svg {
+      width: 100%;
+      height: 100%;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+    }
+
+    .code-fact strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* ─── Playground ──────────────────────────────────────────────── */
+    #playground {
+      border-top: 1px solid var(--border);
+    }
+
+    .pg-tabs-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      width: fit-content;
+      margin-bottom: 32px;
+    }
+
+    .pg-tab-btn {
+      font-family: var(--ff-mono);
+      font-size: 12px;
+      padding: 9px 18px;
+      color: var(--text-3);
+      background: var(--bg-2);
+      border-right: 1px solid var(--border);
+      transition: all var(--t);
+    }
+
+    .pg-tab-btn:last-child {
+      border-right: none;
+    }
+
+    .pg-tab-btn.active {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .pg-tab-btn:hover:not(.active) {
+      color: var(--text-2);
+    }
+
+    .pg-panel {
+      display: none;
+    }
+
+    .pg-panel.active {
+      display: block;
+    }
+
+    /* Sandbox */
+    .sandbox-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      min-height: 520px;
+    }
+
+    @media (max-width: 860px) {
+      .sandbox-layout {
+        grid-template-columns: 1fr;
+        min-height: unset;
+      }
+    }
+
+    .sb-left {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      max-height: 520px;
+    }
+
+    .sb-left::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .sb-left::-webkit-scrollbar-thumb {
+      background: var(--border-2);
+      border-radius: 4px;
+    }
+
+    .sb-cat {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sb-cat-hdr {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      padding: 10px 16px 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      transition: color var(--t);
+    }
+
+    .sb-cat-hdr:hover {
+      color: var(--text-2);
+    }
+
+    .sb-cat-hdr svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      transition: transform var(--t);
+    }
+
+    .sb-cat-hdr.collapsed svg {
+      transform: rotate(-90deg);
+    }
+
+    .sb-cat-body {
+      padding: 8px 12px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .sb-cat.collapsed .sb-cat-body {
+      display: none;
+    }
+
+    .sb-chip {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      padding: 4px 9px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+      color: var(--text-3);
+      cursor: pointer;
+      transition: all var(--t);
+      user-select: none;
+    }
+
+    .sb-chip:hover {
+      border-color: var(--border-2);
+      color: var(--text-2);
+    }
+
+    .sb-chip.on {
+      background: var(--green-pale);
+      border-color: var(--green);
+      color: var(--green-text);
+    }
+
+    .sb-right {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sb-right-top {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .sb-label {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--text-3);
+      letter-spacing: 0.05em;
+    }
+
+    .sb-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .sb-btn {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+      color: var(--text-2);
+      transition: all var(--t);
+    }
+
+    .sb-btn:hover {
+      border-color: var(--border-2);
+      color: var(--text);
+    }
+
+    .sb-btn.green {
+      border-color: var(--green);
+      color: var(--green-text);
+      background: var(--green-pale);
+    }
+
+    .sb-btn.green:hover {
+      background: var(--green);
+      color: #fff;
+    }
+
+    /* Preset selector */
+    .sb-presets {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sb-preset {
+      font-family: var(--ff-mono);
+      font-size: 10.5px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+      color: var(--text-3);
+      cursor: pointer;
+      transition: all var(--t);
+    }
+
+    .sb-preset:hover {
+      color: var(--text-2);
+      border-color: var(--border-2);
+    }
+
+    .sb-preset.active {
+      background: var(--bg-3);
+      color: var(--text);
+      border-color: var(--border-2);
+    }
+
+    .sb-preview-wrap {
+      flex: 1;
+      padding: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-2);
+      position: relative;
+      overflow: auto;
+      min-height: 200px;
+    }
+
+    /* The actual Jetflow-powered element being previewed */
+    #sb-el {
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .sb-child {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--text-2);
+      min-width: 60px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .sb-output-wrap {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      background: var(--code-bg);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sb-output-code {
+      font-family: var(--ff-mono);
+      font-size: 11.5px;
+      color: var(--green-text);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sb-copy-btn {
+      font-family: var(--ff-mono);
+      font-size: 10.5px;
+      padding: 4px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--code-border);
+      color: var(--text-3);
+      background: var(--code-bg);
+      flex-shrink: 0;
+      transition: all var(--t);
+    }
+
+    .sb-copy-btn:hover {
+      color: var(--green-text);
+      border-color: var(--green);
+    }
+
+    /* ─── Responsive Preview ──────────────────────────────────────── */
+    .resp-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .resp-btn {
+      font-family: var(--ff-mono);
+      font-size: 11.5px;
+      padding: 7px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+      color: var(--text-3);
+      transition: all var(--t);
+      cursor: pointer;
+    }
+
+    .resp-btn:hover {
+      color: var(--text-2);
+      border-color: var(--border-2);
+    }
+
+    .resp-btn.active {
+      background: var(--bg);
+      color: var(--text);
+      border-color: var(--border-2);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .resp-size-display {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--text-3);
+      padding: 0 4px;
+    }
+
+    .resp-bp-indicator {
+      font-family: var(--ff-mono);
+      font-size: 10.5px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      background: var(--green-pale);
+      color: var(--green-text);
+      border: 1px solid var(--green);
+    }
+
+    .resp-outer {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg-2);
+      padding: 24px;
+    }
+
+    .resp-chrome {
+      border: 1px solid var(--border-2);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg);
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      margin: 0 auto;
+    }
+
+    .resp-url-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .resp-url-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .resp-url-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border-2);
+    }
+
+    .resp-url-input {
+      flex: 1;
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 8px;
+      color: var(--text-3);
+      pointer-events: none;
+    }
+
+    .resp-content {
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    /* The sample layout inside the responsive preview */
+    .sample-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .sample-nav-logo {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .sample-nav-links {
+      display: flex;
+      gap: 16px;
+    }
+
+    .sample-nav-link {
+      font-size: 11px;
+      color: var(--text-2);
+    }
+
+    .sample-nav-cta {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 5px 12px;
+      border-radius: 4px;
+      background: var(--green);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+
+    .sample-hero {
+      padding: 32px 20px 24px;
+      background: var(--bg);
+    }
+
+    .sample-h {
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-size: clamp(20px, 4vw, 36px);
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .sample-p {
+      font-size: 12px;
+      color: var(--text-2);
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    .sample-btns {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .sample-btn-g {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 7px 14px;
+      background: var(--green);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .sample-btn-o {
+      font-size: 11px;
+      padding: 7px 14px;
+      background: transparent;
+      color: var(--text-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .sample-cards {
+      display: grid;
+      gap: 12px;
+      padding: 20px;
+      background: var(--bg-2);
+    }
+
+    .sample-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+    }
+
+    .sample-card-t {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .sample-card-d {
+      font-size: 11px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+
+    .sample-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 10.5px;
+      color: var(--text-3);
+      display: flex;
+      justify-content: space-between;
+      background: var(--bg);
+    }
+
+    /* ─── Comparison ──────────────────────────────────────────────── */
+    #compare {
+      border-top: 1px solid var(--border);
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    @media (max-width: 700px) {
+      .compare-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .compare-col {}
+
+    .compare-col:first-child {
+      border-right: 1px solid var(--border);
+    }
+
+    @media (max-width: 700px) {
+      .compare-col:first-child {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+
+    .compare-hdr {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .compare-badge {
+      font-family: var(--ff-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 3px;
+    }
+
+    .badge-red {
+      background: rgba(239, 68, 68, 0.08);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.15);
+    }
+
+    .badge-grn {
+      background: var(--green-pale);
+      color: var(--green-text);
+      border: 1px solid var(--green);
+    }
+
+    .compare-hdr-label {
+      font-size: 12px;
+      color: var(--text-2);
+    }
+
+    .compare-code {
+      padding: 18px 20px;
+      font-family: var(--ff-mono);
+      font-size: 12px;
+      line-height: 1.85;
+      color: #888;
+      background: var(--code-bg);
+      overflow-x: auto;
+      min-height: 200px;
+    }
+
+    .compare-metrics {
+      padding: 0 20px;
+      background: var(--bg);
+    }
+
+    .metric {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12.5px;
+    }
+
+    .metric:last-child {
+      border-bottom: none;
+    }
+
+    .metric-k {
+      color: var(--text-2);
+    }
+
+    .metric-v-bad {
+      font-family: var(--ff-mono);
+      font-size: 11.5px;
+      color: #ef4444;
+    }
+
+    .metric-v-good {
+      font-family: var(--ff-mono);
+      font-size: 11.5px;
+      color: var(--green-text);
+    }
+
+    /* ─── Footer ──────────────────────────────────────────────────── */
+    #footer {
+      border-top: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+
+    .footer-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 56px 24px 32px;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 48px;
+      margin-bottom: 48px;
+    }
+
+    @media (max-width: 700px) {
+      .footer-grid {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+    }
+
+    .footer-brand-name {
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: var(--text);
+      font-family: var(--ff-display);
+    }
+
+    .footer-desc {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.75;
+      max-width: 280px;
+    }
+
+    .footer-col-title {
+      font-family: var(--ff-mono);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-3);
+      margin-bottom: 16px;
+    }
+
+    .footer-links {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .footer-links a {
+      font-size: 13px;
+      color: var(--text-2);
+      transition: color var(--t);
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    .footer-links a.ext::after {
+      content: ' ↗';
+      font-size: 10px;
+      opacity: 0.6;
+    }
+
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-copy {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--text-3);
+    }
+
+    .footer-copy span {
+      color: var(--green-text);
+    }
+
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* ─── Toast ───────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--text);
+      color: var(--bg);
+      font-family: var(--ff-mono);
+      font-size: 12px;
+      padding: 9px 18px;
+      border-radius: 6px;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+      opacity: 0;
+      z-index: 999;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    #toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ─── Green CTA bar ───────────────────────────────────────────── */
+    #cta-bar {
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .cta-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 64px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .cta-text {}
+
+    .cta-title {
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .cta-sub {
+      font-size: 14px;
+      color: var(--text-2);
+    }
+
+    .cta-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ─── NAV ─────────────────────────────────────────────────────────── -->
+  <nav id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <div class="nav-logo-mark">
+          <img src="icon.png">
+        </div>
+        Jetflow
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#code">Examples</a></li>
+        <li><a href="#playground">Playground</a></li>
+        <li><a href="jetflow-changelog.html" target="_blank" class="ext">Changelog</a></li>
+        <li><a href="https://github.com/JetflowJS/Jetflow" target="_blank" class="ext">Docs</a></li>
+      </ul>
+      <div class="nav-right">
+        <span class="nav-version">v0.1.0</span>
+        <button class="theme-btn" id="themeBtn" aria-label="Toggle theme">
+          <svg id="icon-moon" viewBox="0 0 24 24">
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke-linejoin="round" />
+          </svg>
+          <svg id="icon-sun" viewBox="0 0 24 24" style="display:none">
+            <circle cx="12" cy="12" r="5" stroke-linejoin="round" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        </button>
+        <button class="nav-mobile-btn" id="mobileBtn" aria-label="Open menu">
+          <svg viewBox="0 0 24 24">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="#features">Features</a>
+    <a href="#code">Examples</a>
+    <a href="#playground">Playground</a>
+    <a href="jetflow-changelog.html" target="_blank">Changelog ↗</a>
+    <a href="https://github.com/JetflowJS/Jetflow" target="_blank">Docs ↗</a>
+  </div>
+
+  <!-- ─── HERO ─────────────────────────────────────────────────────────── -->
+  <div style="padding-top:56px">
+    <div class="section"
+      style="padding-bottom:0;min-height:calc(100vh - 56px);display:flex;flex-direction:column;justify-content:flex-end;border-left:1px solid var(--border);border-right:1px solid var(--border);">
+      <div>
+        <div class="hero-eyebrow reveal">
+          <div class="hero-eyebrow-dot"></div>
+          Introducing v0.1.0 · Now available
+        </div>
+        <h1 class="hero-h1 reveal d1">Write less.<br />Ship faster.</h1>
+        <div class="hero-row reveal d2">
+          <p class="hero-desc">
+            Jetflow is a utility-first CSS framework that runs entirely in the browser.
+            Drop in one script tag, write atomic classes in HTML, and ship.
+            No build step. No config required.
+          </p>
+          <div class="hero-actions">
+            <div class="hero-btns">
+              <a href="#playground" class="btn-green">Try Playground</a>
+              <a href="jetflow-changelog.html" target="_blank" class="btn-outline">Changelog ↗</a>
+            </div>
+            <div class="hero-cmd">
+              <code
+                id="install-cmd">&lt;script src="cdn.jsdelivr.net/gh/JetflowJS/Jetflow@v0.1.0/jetflow.min.js"&gt;&lt;/script&gt;</code>
+              <button class="hero-cmd-copy" onclick="copyInstall()">copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── FEATURES ─────────────────────────────────────────────────────── -->
+  <section id="features">
+    <div class="section">
+      <div class="section-head">
+        <div class="section-label reveal">Core capabilities</div>
+        <h2 class="section-title reveal d1">Everything resolved<br />at runtime.</h2>
+        <p class="section-sub reveal d2">Jetflow watches your DOM and generates only the CSS you actually use — in real
+          time, with no compilation step.</p>
+      </div>
+
+      <div class="pillars reveal d1">
+        <div class="pillar">
+          <div class="pillar-num">01 / UTILITY SYSTEM</div>
+          <div class="pillar-title">Atomic classes,<br />on demand.</div>
+          <div class="pillar-desc">500+ utilities for layout, spacing, color, typography, and effects. Each class maps
+            to a single CSS declaration — composable by design.</div>
+          <div class="pillar-tags">
+            <span class="ptag">flex-center</span><span class="ptag">text-bold</span><span class="ptag">p-6</span><span
+              class="ptag">gap-4</span>
+          </div>
+        </div>
+        <div class="pillar">
+          <div class="pillar-num">02 / DARK MODE</div>
+          <div class="pillar-title">Class-based and<br />media-query both.</div>
+          <div class="pillar-desc">Set <code style="font-family:var(--ff-mono);font-size:0.85em">darkMode: "both"</code>
+            and support class toggles and system preference simultaneously. No extra config needed.</div>
+          <div class="pillar-tags">
+            <span class="ptag">dark:bg-slate-900</span><span class="ptag">dark:text-white</span>
+          </div>
+        </div>
+        <div class="pillar">
+          <div class="pillar-num">03 / THEMING</div>
+          <div class="pillar-title">Extend, don't<br />replace.</div>
+          <div class="pillar-desc">Pass a config with custom colors, spacing, and border-radius. Your tokens merge with
+            Jetflow's base system, not over it.</div>
+          <div class="pillar-tags">
+            <span class="ptag">brand-mid</span><span class="ptag">spacing-18</span><span class="ptag">rounded-4xl</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="feat-grid reveal d2">
+        <div class="feat-item">
+          <div class="feat-name">Responsive breakpoints</div>
+          <div class="feat-desc">Five prefixes: sm, md, lg, xl, 2xl. Works on any utility.</div>
+          <div class="feat-cls">md:flex-col lg:grid-cols-3</div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-name">Arbitrary values</div>
+          <div class="feat-desc">Bracket notation for one-off values without custom utilities.</div>
+          <div class="feat-cls">mt-[42px] bg-[#1a1a1a] w-[calc(100%-2rem)]</div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-name">Apply & component classes</div>
+          <div class="feat-desc">Group utility chains into named selectors via the config.</div>
+          <div class="feat-cls">.btn-primary .card .notice</div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-name">Transform pipeline</div>
+          <div class="feat-desc">Translate, rotate, scale, skew — all via CSS custom properties.</div>
+          <div class="feat-cls">scale-105 rotate-12 translate-x-2</div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-name">Ring & shadow system</div>
+          <div class="feat-desc">Box shadow and focus ring utilities that compose cleanly.</div>
+          <div class="feat-cls">ring-2 ring-brand-mid shadow-lg</div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-name">MutationObserver powered</div>
+          <div class="feat-desc">Dynamically added elements are automatically styled — perfect for SPAs.</div>
+          <div class="feat-cls">Watches DOM · No re-init needed</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CODE SHOWCASE ─────────────────────────────────────────────────── -->
+  <section id="code" style="border-top:1px solid var(--border)">
+    <div class="section">
+      <div class="code-layout">
+        <div>
+          <div class="code-tabs" id="codeTabs">
+            <button class="ctab active" data-tab="buttons">Buttons</button>
+            <button class="ctab" data-tab="layout">Layout</button>
+            <button class="ctab" data-tab="cards">Cards</button>
+            <button class="ctab" data-tab="config">Config</button>
+          </div>
+          <div class="code-frame">
+            <div class="code-bar">
+              <span class="cdot cdot-r"></span>
+              <span class="cdot cdot-y"></span>
+              <span class="cdot cdot-g"></span>
+              <span class="code-fn" id="codeFile">index.html</span>
+            </div>
+            <pre class="code-body active" id="tab-buttons"><code><span class="cc">&lt;!-- Via .apply class --&gt;</span>
+<span class="ct">&lt;button</span> <span class="ca">class</span>=<span class="cs">"btn-primary"</span><span class="ct">&gt;</span>
+  Get Started
+<span class="ct">&lt;/button&gt;</span>
+
+<span class="cc">&lt;!-- Composed from utilities --&gt;</span>
+<span class="ct">&lt;button</span> <span class="ca">class</span>=<span class="cs">"flex-center gap-2 rounded-md
+         bg-brand-mid px-4 py-2 text-sm
+         text-bold text-white shadow-sm
+         transition hover:bg-brand-dark
+         focus:ring-2 focus:ring-brand-mid"</span><span class="ct">&gt;</span>
+  Save Changes
+<span class="ct">&lt;/button&gt;</span>
+
+<span class="cc">&lt;!-- Notice banner --&gt;</span>
+<span class="ct">&lt;div</span> <span class="ca">class</span>=<span class="cs">"notice"</span><span class="ct">&gt;</span>
+  ⚠ Session expires in 5 minutes.
+<span class="ct">&lt;/div&gt;</span></code></pre>
+
+            <pre class="code-body" id="tab-layout"><code><span class="cc">&lt;!-- flex-between (navbar) --&gt;</span>
+<span class="ct">&lt;header</span> <span class="ca">class</span>=<span class="cs">"flex-between px-6 py-4
+         border-b border-gray-200"</span><span class="ct">&gt;</span>
+  <span class="ct">&lt;span</span> <span class="ca">class</span>=<span class="cs">"text-bold"</span><span class="ct">&gt;</span>Logo<span class="ct">&lt;/span&gt;</span>
+  <span class="ct">&lt;nav</span> <span class="ca">class</span>=<span class="cs">"flex-center gap-6"</span><span class="ct">&gt;</span>
+    <span class="ct">&lt;a&gt;</span>Docs<span class="ct">&lt;/a&gt;</span> <span class="ct">&lt;a&gt;</span>Blog<span class="ct">&lt;/a&gt;</span>
+  <span class="ct">&lt;/nav&gt;</span>
+<span class="ct">&lt;/header&gt;</span>
+
+<span class="cc">&lt;!-- Responsive grid --&gt;</span>
+<span class="ct">&lt;div</span> <span class="ca">class</span>=<span class="cs">"grid grid-cols-1
+         md:grid-cols-2
+         lg:grid-cols-3 gap-6"</span><span class="ct">&gt;</span>
+  <span class="ct">&lt;div</span> <span class="ca">class</span>=<span class="cs">"card"</span><span class="ct">&gt;</span>Item<span class="ct">&lt;/div&gt;</span>
+<span class="ct">&lt;/div&gt;</span>
+
+<span class="cc">&lt;!-- grid-center --&gt;</span>
+<span class="ct">&lt;div</span> <span class="ca">class</span>=<span class="cs">"grid-center min-h-screen"</span><span class="ct">&gt;</span>
+  <span class="ct">&lt;p&gt;</span>Perfectly centered.<span class="ct">&lt;/p&gt;</span>
+<span class="ct">&lt;/div&gt;</span></code></pre>
+
+            <pre class="code-body" id="tab-cards"><code><span class="cc">&lt;!-- .card apply class --&gt;</span>
+<span class="ct">&lt;div</span> <span class="ca">class</span>=<span class="cs">"card"</span><span class="ct">&gt;</span>
+  <span class="ct">&lt;h3</span> <span class="ca">class</span>=<span class="cs">"text-lg text-bold mb-2
+              dark:text-white"</span><span class="ct">&gt;</span>
+    Card Title
+  <span class="ct">&lt;/h3&gt;</span>
+  <span class="ct">&lt;p</span> <span class="ca">class</span>=<span class="cs">"text-sm text-muted"</span><span class="ct">&gt;</span>
+    Uses text-muted utility alias.
+  <span class="ct">&lt;/p&gt;</span>
+<span class="ct">&lt;/div&gt;</span>
+
+<span class="cc">&lt;!-- box utility --&gt;</span>
+<span class="ct">&lt;div</span> <span class="ca">class</span>=<span class="cs">"box"</span><span class="ct">&gt;</span>
+  Simple bordered block
+<span class="ct">&lt;/div&gt;</span>
+
+<span class="cc">&lt;!-- box-dark variant --&gt;</span>
+<span class="ct">&lt;div</span> <span class="ca">class</span>=<span class="cs">"box-dark"</span><span class="ct">&gt;</span>
+  Dark surface variant
+<span class="ct">&lt;/div&gt;</span></code></pre>
+
+            <pre class="code-body" id="tab-config"><code><span class="cc">// jetflow.config.js</span>
+<span class="ck">export default</span> {
+  <span class="ca">darkMode</span>: <span class="cs">"both"</span>,
+  <span class="ca">reset</span>: <span class="ck">true</span>,
+  <span class="ca">theme</span>: {
+    <span class="ca">extend</span>: {
+      <span class="ca">colors</span>: {
+        <span class="ca">brand</span>: {
+          <span class="ca">light</span>: <span class="cs">"#d9efff"</span>,
+          <span class="ca">mid</span>:   <span class="cs">"#1479c9"</span>,
+          <span class="ca">dark</span>:  <span class="cs">"#0d4f83"</span>
+        }
+      },
+      <span class="ca">spacing</span>: {
+        <span class="cn">18</span>: <span class="cs">"4.5rem"</span>,
+        <span class="cn">128</span>: <span class="cs">"32rem"</span>
+      }
+    }
+  },
+  <span class="ca">apply</span>: {
+    <span class="cs">".btn-primary"</span>: <span class="cs">"flex-center gap-2
+       rounded-md bg-brand-mid px-4 py-2
+       text-sm text-bold text-white
+       transition hover:bg-brand-dark"</span>
+  },
+  <span class="ca">utilities</span>: {
+    <span class="cs">"flex-center"</span>: <span class="cs">"flex items-center
+       justify-center"</span>
+  }
+};</code></pre>
+          </div>
+        </div>
+
+        <div class="code-info reveal d1">
+          <div class="section-label" style="margin-bottom:12px">Real markup</div>
+          <div class="code-info-title">Classes in HTML.<br />CSS in the browser.</div>
+          <div class="code-info-desc">
+            Jetflow parses your class attributes at load time, then watches
+            the DOM for changes via MutationObserver. CSS is generated on
+            demand — no output file, no stylesheet to maintain.
+          </div>
+          <div class="code-facts">
+            <div class="code-fact">
+              <div class="code-fact-icon"><svg viewBox="0 0 24 24">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg></div>
+              <span><strong>Arbitrary values</strong> — use <code
+                  style="font-family:var(--ff-mono);font-size:0.85em">mt-[42px]</code> or <code
+                  style="font-family:var(--ff-mono);font-size:0.85em">bg-[#ff6b00]</code> inline.</span>
+            </div>
+            <div class="code-fact">
+              <div class="code-fact-icon"><svg viewBox="0 0 24 24">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg></div>
+              <span><strong>Responsive modifiers</strong> — prefix any class with <code
+                  style="font-family:var(--ff-mono);font-size:0.85em">md:</code>, <code
+                  style="font-family:var(--ff-mono);font-size:0.85em">lg:</code>, etc.</span>
+            </div>
+            <div class="code-fact">
+              <div class="code-fact-icon"><svg viewBox="0 0 24 24">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg></div>
+              <span><strong>State variants</strong> — <code
+                  style="font-family:var(--ff-mono);font-size:0.85em">hover:</code>, <code
+                  style="font-family:var(--ff-mono);font-size:0.85em">focus:</code>, <code
+                  style="font-family:var(--ff-mono);font-size:0.85em">active:</code> all supported.</span>
+            </div>
+            <div class="code-fact">
+              <div class="code-fact-icon"><svg viewBox="0 0 24 24">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg></div>
+              <span><strong>No build step</strong> — works in a plain <code
+                  style="font-family:var(--ff-mono);font-size:0.85em">.html</code> file served over any CDN.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── PLAYGROUND ────────────────────────────────────────────────────── -->
+  <section id="playground" style="border-top:1px solid var(--border)">
+    <div class="section">
+      <div class="section-head">
+        <div class="section-label reveal">Interactive</div>
+        <h2 class="section-title reveal d1">Try it without<br />writing a line.</h2>
+        <p class="section-sub reveal d2">Toggle utility classes on a live element and see Jetflow resolve them
+          instantly. Switch to Responsive Preview to test breakpoint behavior.</p>
+      </div>
+
+      <div class="pg-tabs-row reveal">
+        <button class="pg-tab-btn active" data-pg="sandbox">Utility Sandbox</button>
+        <button class="pg-tab-btn" data-pg="responsive">Responsive Preview</button>
+      </div>
+
+      <!-- UTILITY SANDBOX -->
+      <div class="pg-panel active reveal d1" id="pg-sandbox">
+        <div class="sandbox-layout">
+          <!-- Left: class picker -->
+          <div class="sb-left" id="sbLeft">
+            <!-- Populated by JS -->
+          </div>
+          <!-- Right: preview + output -->
+          <div class="sb-right">
+            <div class="sb-right-top">
+              <span class="sb-label">LIVE PREVIEW</span>
+              <div class="sb-actions">
+                <button class="sb-btn" onclick="resetSandbox()">Reset</button>
+                <button class="sb-btn green" onclick="copySandboxCode()">Copy HTML</button>
+              </div>
+            </div>
+            <!-- Presets -->
+            <div class="sb-presets">
+              <span
+                style="font-family:var(--ff-mono);font-size:10px;color:var(--text-3);padding:4px 4px 4px 0;flex-shrink:0">Presets:</span>
+              <button class="sb-preset active" data-preset="blank" onclick="applyPreset(this,'blank')">Blank</button>
+              <button class="sb-preset" data-preset="row" onclick="applyPreset(this,'row')">Flex Row</button>
+              <button class="sb-preset" data-preset="col" onclick="applyPreset(this,'col')">Flex Column</button>
+              <button class="sb-preset" data-preset="grid" onclick="applyPreset(this,'grid')">Grid 3-col</button>
+              <button class="sb-preset" data-preset="card" onclick="applyPreset(this,'card')">Centered Card</button>
+              <button class="sb-preset" data-preset="nav" onclick="applyPreset(this,'nav')">Navbar</button>
+            </div>
+            <div class="sb-preview-wrap">
+              <!-- This is the live Jetflow target element -->
+              <div id="sb-el">
+                <div class="sb-child">Alpha</div>
+                <div class="sb-child">Beta</div>
+                <div class="sb-child">Gamma</div>
+              </div>
+            </div>
+            <div class="sb-output-wrap">
+              <div class="sb-output-code" id="sbOutput">&lt;div class=""&gt;...&lt;/div&gt;</div>
+              <button class="sb-copy-btn" onclick="copySandboxCode()">copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESPONSIVE PREVIEW -->
+      <div class="pg-panel" id="pg-responsive">
+        <div class="resp-controls">
+          <button class="resp-btn active" onclick="setBreakpoint(this,375)">
+            <svg
+              style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;vertical-align:-2px;margin-right:4px"
+              viewBox="0 0 24 24">
+              <rect x="7" y="2" width="10" height="20" rx="2" />
+            </svg>Mobile · 375px
+          </button>
+          <button class="resp-btn" onclick="setBreakpoint(this,768)">
+            <svg
+              style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;vertical-align:-2px;margin-right:4px"
+              viewBox="0 0 24 24">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+            </svg>Tablet · 768px
+          </button>
+          <button class="resp-btn" onclick="setBreakpoint(this,1280)">
+            <svg
+              style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;vertical-align:-2px;margin-right:4px"
+              viewBox="0 0 24 24">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <path d="M8 21h8M12 17v4" />
+            </svg>Desktop · 1280px
+          </button>
+          <span class="resp-size-display" id="respSizeLabel">375 × auto</span>
+          <span class="resp-bp-indicator" id="respBpLabel">sm breakpoint</span>
+        </div>
+        <div class="resp-outer">
+          <div class="resp-chrome" id="respChrome" style="width:375px">
+            <div class="resp-url-bar">
+              <div class="resp-url-dots">
+                <div class="resp-url-dot"></div>
+                <div class="resp-url-dot"></div>
+                <div class="resp-url-dot"></div>
+              </div>
+              <div class="resp-url-input">jetflow-demo.html</div>
+            </div>
+            <div class="resp-content" id="respContent">
+              <!-- Sample layout -->
+              <div class="sample-nav" id="sampleNav">
+                <div class="sample-nav-logo">⚡ Acme</div>
+                <div class="sample-nav-links" id="sampleNavLinks">
+                  <span class="sample-nav-link">Features</span>
+                  <span class="sample-nav-link">Pricing</span>
+                  <span class="sample-nav-link">Blog</span>
+                </div>
+                <button class="sample-nav-cta">Sign up</button>
+              </div>
+              <div class="sample-hero">
+                <div class="sample-h" id="sampleH">Build interfaces<br />at runtime speed.</div>
+                <p class="sample-p">A browser-native CSS framework. Write utility classes, ship instantly. No build step
+                  required.</p>
+                <div class="sample-btns">
+                  <button class="sample-btn-g">Get Started</button>
+                  <button class="sample-btn-o">View Docs ↗</button>
+                </div>
+              </div>
+              <div class="sample-cards" id="sampleCards">
+                <!-- Populated by JS based on breakpoint -->
+              </div>
+              <div class="sample-footer">
+                <span>© 2025 Acme Inc.</span>
+                <span>Powered by Jetflow</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── COMPARISON ────────────────────────────────────────────────────── -->
+  <section id="compare" style="border-top:1px solid var(--border)">
+    <div class="section">
+      <div class="section-head">
+        <div class="section-label reveal">Why utility-first</div>
+        <h2 class="section-title reveal d1">Less CSS.<br />More shipping.</h2>
+        <p class="section-sub reveal d2">Stop switching between HTML and a stylesheet. The answer is right there in the
+          attribute.</p>
+      </div>
+      <div class="compare-grid reveal d1">
+        <div class="compare-col">
+          <div class="compare-hdr">
+            <span class="compare-badge badge-red">Without Jetflow</span>
+            <span class="compare-hdr-label">Generic CSS approach</span>
+          </div>
+          <pre
+            class="compare-code"><code><span class="cc">/* styles.css */</span>
+<span class="ct">.button</span> {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #1479c9;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+  transition: background 0.2s;
+}
+<span class="ct">.button:hover</span> { background: #0d4f83; }
+<span class="ct">.button:focus</span> {
+  outline: none;
+  box-shadow: 0 0 0 2px #1479c9;
+}
+
+<span class="cc">/* index.html */</span>
+<span class="ct">&lt;button</span> <span class="ca">class</span>=<span class="cs">"button"</span><span class="ct">&gt;</span>...<span class="ct">&lt;/button&gt;</span></code></pre>
+          <div class="compare-metrics">
+            <div class="metric"><span class="metric-k">Lines written</span><span class="metric-v-bad">17 CSS + 1
+                HTML</span></div>
+            <div class="metric"><span class="metric-k">Files touched</span><span class="metric-v-bad">2 (styles.css +
+                index.html)</span></div>
+            <div class="metric"><span class="metric-k">Build step</span><span class="metric-v-bad">Required</span></div>
+            <div class="metric"><span class="metric-k">Dark mode</span><span class="metric-v-bad">Manual media
+                queries</span></div>
+          </div>
+        </div>
+        <div class="compare-col">
+          <div class="compare-hdr">
+            <span class="compare-badge badge-grn">With Jetflow</span>
+            <span class="compare-hdr-label">Utility-first approach</span>
+          </div>
+          <pre class="compare-code"><code><span class="cc">&lt;!-- index.html -- that's it --&gt;</span>
+
+<span class="ct">&lt;button</span> <span class="ca">class</span>=<span class="cs">"btn-primary"</span><span class="ct">&gt;</span>
+  Get Started
+<span class="ct">&lt;/button&gt;</span>
+
+<span class="cc">&lt;!-- or compose freely: --&gt;</span>
+
+<span class="ct">&lt;button</span>
+  <span class="ca">class</span>=<span class="cs">"flex-center gap-2 rounded-md
+         bg-brand-mid px-4 py-2
+         text-sm text-bold text-white
+         transition hover:bg-brand-dark
+         focus:ring-2 focus:ring-brand-mid"</span>
+<span class="ct">&gt;</span>
+  Get Started
+<span class="ct">&lt;/button&gt;</span></code></pre>
+          <div class="compare-metrics">
+            <div class="metric"><span class="metric-k">Lines written</span><span class="metric-v-good">1 class
+                attribute</span></div>
+            <div class="metric"><span class="metric-k">Files touched</span><span class="metric-v-good">1 (index.html
+                only)</span></div>
+            <div class="metric"><span class="metric-k">Build step</span><span class="metric-v-good">None</span></div>
+            <div class="metric"><span class="metric-k">Dark mode</span><span class="metric-v-good">dark: prefix,
+                built-in</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CTA BAR ───────────────────────────────────────────────────────── -->
+  <div id="cta-bar">
+    <div class="cta-inner">
+      <div class="cta-text">
+        <div class="cta-title">Ready to start?</div>
+        <div class="cta-sub">One script tag. Zero configuration. Ship today.</div>
+      </div>
+      <div class="cta-actions">
+        <a href="https://github.com/JetflowJS/Jetflow" target="_blank" class="btn-green">View on GitHub ↗</a>
+        <a href="jetflow-changelog.html" target="_blank" class="btn-outline">Changelog ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── FOOTER ────────────────────────────────────────────────────────── -->
+  <footer id="footer">
+    <div class="footer-inner">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand-name">Jetflow</div>
+          <div class="footer-desc">A browser-native, utility-first CSS framework. Drop in one script tag, write atomic
+            classes, ship instantly. No build step.</div>
+        </div>
+        <div>
+          <div class="footer-col-title">Framework</div>
+          <ul class="footer-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#code">Examples</a></li>
+            <li><a href="#playground">Playground</a></li>
+            <li><a href="#compare">Comparison</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="footer-col-title">Resources</div>
+          <ul class="footer-links">
+            <li><a href="https://github.com/JetflowJS/Jetflow" target="_blank" class="ext">GitHub</a></li>
+            <li><a href="https://cdn.jsdelivr.net/gh/JetflowJS/Jetflow@v0.1.0/" target="_blank" class="ext">CDN</a></li>
+            <li><a href="jetflow-changelog.html" target="_blank" class="ext">Changelog</a></li>
+            <li><a href="https://github.com/JetflowJS/Jetflow" target="_blank" class="ext">Docs</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copy">© 2025 Jetflow · MIT License · Built by <span>JetflowJS</span></div>
+        <div class="footer-right">
+          <span style="font-family:var(--ff-mono);font-size:11px;color:var(--text-3)">v0.1.0</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <div id="toast"></div>
+
+  <svg style="display: none;">
+    <defs>
+      <filter id="wave-filter">
+        <feTurbulence type="fractalNoise" baseFrequency="0.01 0.03" numOctaves="1" result="noise">
+          <animate attributeName="baseFrequency" values="0.01 0.03; 0.03 0.05; 0.01 0.03" dur="10s"
+            repeatCount="indefinite" />
+        </feTurbulence>
+
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="20" xChannelSelector="R" yChannelSelector="G"
+          result="distorted" />
+
+        <feGaussianBlur in="distorted" stdDeviation="2.5" result="blurred" />
+      </filter>
+    </defs>
+  </svg>
+
+  <script>
+    'use strict';
+
+    /* ── Theme ──────────────────────────────────────────────────────── */
+    const html = document.documentElement;
+    const themeBtn = document.getElementById('themeBtn');
+    const iconMoon = document.getElementById('icon-moon');
+    const iconSun = document.getElementById('icon-sun');
+    function applyTheme(dark) {
+      html.setAttribute('data-theme', dark ? 'dark' : 'light');
+      iconMoon.style.display = dark ? '' : 'none';
+      iconSun.style.display = dark ? 'none' : '';
+      localStorage.setItem('jf-theme', dark ? 'dark' : 'light');
+    }
+    applyTheme(localStorage.getItem('jf-theme') !== 'light');
+    themeBtn.addEventListener('click', () => applyTheme(html.getAttribute('data-theme') === 'light'));
+
+    /* ── Mobile menu ────────────────────────────────────────────────── */
+    document.getElementById('mobileBtn').addEventListener('click', () => {
+      document.getElementById('mobileMenu').classList.toggle('open');
+    });
+    document.querySelectorAll('.mobile-menu a').forEach(a =>
+      a.addEventListener('click', () => document.getElementById('mobileMenu').classList.remove('open'))
+    );
+
+    /* ── Smooth scroll ──────────────────────────────────────────────── */
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
+        const el = document.querySelector(a.getAttribute('href'));
+        if (!el) return;
+        e.preventDefault();
+        window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - 64, behavior: 'smooth' });
+      });
+    });
+
+    /* ── Reveal ─────────────────────────────────────────────────────── */
+    const revealObs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); revealObs.unobserve(e.target); } });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+
+    /* ── Code tabs ──────────────────────────────────────────────────── */
+    const fileMap = { buttons: 'index.html', layout: 'index.html', cards: 'index.html', config: 'jetflow.config.js' };
+    document.querySelectorAll('#codeTabs .ctab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#codeTabs .ctab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.code-body').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.getElementById('tab-' + tab).classList.add('active');
+        document.getElementById('codeFile').textContent = fileMap[tab] || 'index.html';
+      });
+    });
+
+    /* ── Playground tabs ────────────────────────────────────────────── */
+    document.querySelectorAll('.pg-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.pg-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.pg-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('pg-' + btn.dataset.pg).classList.add('active');
+      });
+    });
+
+    /* ── Sandbox class definitions ──────────────────────────────────── */
+    const sandboxDefs = {
+      'Display': [
+        'flex', 'grid', 'block', 'inline-flex', 'inline-block', 'hidden'
+      ],
+      'Flex': [
+        'flex-row', 'flex-col', 'flex-wrap', 'items-start', 'items-center',
+        'items-end', 'items-stretch', 'justify-start', 'justify-center',
+        'justify-between', 'justify-end', 'justify-around'
+      ],
+      'Grid': [
+        'grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4',
+        'place-items-center', 'place-items-start'
+      ],
+      'Gap': [
+        'gap-1', 'gap-2', 'gap-3', 'gap-4', 'gap-6', 'gap-8', 'gap-x-4', 'gap-y-4'
+      ],
+      'Padding': [
+        'p-0', 'p-2', 'p-4', 'p-6', 'p-8', 'p-12',
+        'px-4', 'px-6', 'px-8', 'py-2', 'py-4', 'py-6', 'py-8'
+      ],
+      'Margin': [
+        'm-auto', 'mx-auto', 'my-auto', 'mt-4', 'mb-4', 'ml-4', 'mr-4'
+      ],
+      'Sizing': [
+        'w-full', 'w-1/2', 'w-1/3', 'w-2/3', 'w-64', 'w-48', 'w-32',
+        'h-auto', 'h-16', 'h-32', 'h-64', 'min-h-screen', 'max-w-sm', 'max-w-md', 'max-w-lg'
+      ],
+      'Typography': [
+        'text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-4xl',
+        'font-light', 'font-normal', 'font-medium', 'font-semibold', 'font-bold',
+        'text-left', 'text-center', 'text-right',
+        'uppercase', 'lowercase', 'capitalize', 'tracking-wide', 'tracking-wider',
+        'leading-tight', 'leading-normal', 'leading-relaxed', 'leading-loose'
+      ],
+      'Background': [
+        'bg-white', 'bg-black', 'bg-gray-50', 'bg-gray-100', 'bg-gray-200',
+        'bg-gray-800', 'bg-gray-900', 'bg-transparent'
+      ],
+      'Text Color': [
+        'text-white', 'text-black', 'text-gray-300', 'text-gray-500',
+        'text-gray-700', 'text-gray-900'
+      ],
+      'Border': [
+        'border', 'border-2', 'border-4', 'border-0',
+        'border-white', 'border-black', 'border-gray-200', 'border-gray-400',
+        'rounded-none', 'rounded', 'rounded-md', 'rounded-lg', 'rounded-xl', 'rounded-2xl', 'rounded-full'
+      ],
+      'Shadow': [
+        'shadow-none', 'shadow-sm', 'shadow', 'shadow-md', 'shadow-lg', 'shadow-xl', 'shadow-2xl'
+      ],
+      'Effects': [
+        'opacity-0', 'opacity-25', 'opacity-50', 'opacity-75', 'opacity-90', 'opacity-100',
+        'transition', 'duration-150', 'duration-300', 'duration-500',
+        'hover:opacity-75', 'hover:shadow-lg', 'hover:scale-105',
+        'focus:outline-none', 'focus:ring-2', 'focus:ring-blue-500',
+        'cursor-pointer', 'cursor-default', 'pointer-events-none'
+      ],
+      'Overflow': [
+        'overflow-hidden', 'overflow-auto', 'overflow-scroll', 'overflow-visible',
+        'truncate', 'whitespace-nowrap', 'whitespace-normal'
+      ],
+      'Position': [
+        'relative', 'absolute', 'fixed', 'sticky',
+        'inset-0', 'top-0', 'bottom-0', 'left-0', 'right-0', 'z-10', 'z-50'
+      ]
+    };
+
+    const activeSbClasses = new Set();
+
+    // Build sidebar
+    function buildSandbox() {
+      const left = document.getElementById('sbLeft');
+      left.innerHTML = '';
+      Object.entries(sandboxDefs).forEach(([cat, classes]) => {
+        const div = document.createElement('div');
+        div.className = 'sb-cat';
+        div.innerHTML = `
+      <div class="sb-cat-hdr" onclick="toggleCat(this)">
+        ${cat}
+        <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="sb-cat-body">
+        ${classes.map(c => `<button class="sb-chip" data-cls="${c}" onclick="toggleSbClass(this,'${c}')">${c}</button>`).join('')}
+      </div>
+    `;
+        left.appendChild(div);
+      });
+    }
+
+    function toggleCat(hdr) {
+      hdr.parentElement.classList.toggle('collapsed');
+      hdr.classList.toggle('collapsed');
+    }
+
+    function toggleSbClass(btn, cls) {
+      if (activeSbClasses.has(cls)) {
+        activeSbClasses.delete(cls);
+        btn.classList.remove('on');
+      } else {
+        activeSbClasses.add(cls);
+        btn.classList.add('on');
+      }
+      updateSbPreview();
+    }
+
+    function updateSbPreview() {
+      const el = document.getElementById('sb-el');
+      const clsArr = Array.from(activeSbClasses);
+      el.className = clsArr.join(' ');
+      const clsStr = clsArr.join(' ');
+      document.getElementById('sbOutput').textContent =
+        `<div class="${clsStr}">\n  <!-- children -->\n</div>`;
+    }
+
+    function resetSandbox() {
+      activeSbClasses.clear();
+      document.querySelectorAll('.sb-chip.on').forEach(c => c.classList.remove('on'));
+      document.querySelectorAll('.sb-preset').forEach(p => p.classList.remove('active'));
+      document.querySelector('[data-preset="blank"]').classList.add('active');
+      updateSbPreview();
+      toast('Sandbox reset');
+    }
+
+    function copySandboxCode() {
+      const clsArr = Array.from(activeSbClasses);
+      const html = `<div class="${clsArr.join(' ')}">\n  <!-- children -->\n</div>`;
+      navigator.clipboard.writeText(html).then(() => toast('HTML copied!')).catch(() => toast('Copy failed'));
+    }
+
+    const presets = {
+      blank: [],
+      row: ['flex', 'flex-row', 'items-center', 'gap-4', 'p-6'],
+      col: ['flex', 'flex-col', 'gap-4', 'p-6'],
+      grid: ['grid', 'grid-cols-3', 'gap-4', 'p-6', 'w-full'],
+      card: ['flex', 'flex-col', 'gap-4', 'p-8', 'border', 'rounded-lg', 'shadow-md', 'bg-white', 'max-w-sm', 'mx-auto'],
+      nav: ['flex', 'flex-row', 'items-center', 'justify-between', 'w-full', 'border-b', 'px-6', 'py-3', 'bg-white'],
+    };
+
+    function applyPreset(btn, name) {
+      resetSandbox();
+      document.querySelectorAll('.sb-preset').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const classes = presets[name] || [];
+      classes.forEach(cls => {
+        activeSbClasses.add(cls);
+        const chip = document.querySelector(`.sb-chip[data-cls="${cls}"]`);
+        if (chip) chip.classList.add('on');
+      });
+      updateSbPreview();
+    }
+
+    /* ── Responsive Preview ──────────────────────────────────────────── */
+    function setBreakpoint(btn, px) {
+      document.querySelectorAll('.resp-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const chrome = document.getElementById('respChrome');
+      chrome.style.width = Math.min(px, chrome.parentElement.clientWidth - 48) + 'px';
+      document.getElementById('respSizeLabel').textContent = px + ' × auto';
+      const bp = px < 640 ? 'xs / default' : px < 768 ? 'sm breakpoint' : px < 1024 ? 'md breakpoint' : 'lg breakpoint';
+      document.getElementById('respBpLabel').textContent = bp;
+      // Update sample cards count
+      const count = px < 640 ? 1 : px < 1024 ? 2 : 3;
+      document.getElementById('sampleCards').style.gridTemplateColumns = `repeat(${count},1fr)`;
+      // Hide nav links on mobile
+      const navLinks = document.getElementById('sampleNavLinks');
+      if (navLinks) navLinks.style.display = px < 640 ? 'none' : 'flex';
+      // Adjust hero font size
+      const hero = document.getElementById('sampleH');
+      if (hero) hero.style.fontSize = px < 480 ? '18px' : '24px';
+    }
+
+    function buildSampleCards() {
+      const cards = [
+        { t: 'Utility First', d: 'Build anything with atomic classes.' },
+        { t: 'Dark Mode', d: 'Toggle with dark: prefix on any class.' },
+        { t: 'Responsive', d: 'Five breakpoints, all responsive.' }
+      ];
+      document.getElementById('sampleCards').innerHTML = cards.map(c => `
+    <div class="sample-card">
+      <div class="sample-card-t">${c.t}</div>
+      <div class="sample-card-d">${c.d}</div>
+    </div>`).join('');
+      document.getElementById('sampleCards').style.gridTemplateColumns = '1fr';
+    }
+
+    /* ── Copy install cmd ───────────────────────────────────────────── */
+    function copyInstall() {
+      navigator.clipboard.writeText('<script src="https://cdn.jsdelivr.net/gh/JetflowJS/Jetflow@v0.1.0/jetflow.min.js"><\/script>')
+        .then(() => toast('Script tag copied!'))
+        .catch(() => toast('Copy failed'));
+    }
+
+    /* ── Toast ──────────────────────────────────────────────────────── */
+    let toastTm;
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(toastTm);
+      toastTm = setTimeout(() => t.classList.remove('show'), 2400);
+    }
+
+    /* ── Init ───────────────────────────────────────────────────────── */
+    buildSandbox();
+    buildSampleCards();
+    // Collapse some categories by default to keep sidebar manageable
+    ['Overflow', 'Position', 'Margin'].forEach(cat => {
+      const hdr = Array.from(document.querySelectorAll('.sb-cat-hdr'))
+        .find(h => h.textContent.trim().startsWith(cat));
+      if (hdr) { hdr.parentElement.classList.add('collapsed'); hdr.classList.add('collapsed'); }
+    });
+
+    // Initial responsive chrome width
+    setTimeout(() => {
+      const chrome = document.getElementById('respChrome');
+      if (chrome) {
+        const maxW = chrome.parentElement.clientWidth - 48;
+        if (maxW < 375) { chrome.style.width = maxW + 'px'; }
+      }
+    }, 100);
+  </script>
+</body>
+
+</html>
