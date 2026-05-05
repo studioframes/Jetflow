@@ -125,7 +125,7 @@ Active development. Features and APIs may evolve.
 
 #
 > ## Jetflow is for the Community
-> **Jetflow is, and always will be, open-source and free for everyone.
+> **Jetflow is, and always will be, open-source and free for everyone.**
 
 #
 > [!NOTE]
