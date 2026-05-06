@@ -20,5 +20,6 @@
   "homepage": "https://github.com/Invictus360/Jetflow#readme",
   "dependencies": {
     "esbuild": "^0.28.0"
-  }
+  },
+  "devDependencies": {}
 }
