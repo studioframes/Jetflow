@@ -1498,7 +1498,9 @@ import _userConfig from "./jetflow.config.js";
       if (!src || typeof src !== "object") continue;
       var keys = Object.keys(src);
       for (var k = 0; k < keys.length; k++) {
-        var key = keys[k], val = src[key];
+        var key = keys[k];
+        if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+        var val = src[key];
         if (Array.isArray(val)) {
           target[key] = val.slice();
         } else if (val && typeof val === "object" && !Array.isArray(val)) {
