@@ -133,6 +133,12 @@ export default {
 
 Active development. Features and APIs may evolve.
 
+> [!CAUTION]
+> #### Do not visit or download anything from any unofficial URLs claiming to be jetflow. We do not offer anything for download outside of [this Github repository](https://github.com/JetflowJS/Jetflow) at present.
+> Our official URLs include:
+> - https://jetflow.js.org
+> - https://jetflowjs.pages.dev
+
 ## Disclaimer
 > [!CAUTION]
 > Jetflow is a free and open-source project and is not related to any other Jetflow/JetFlow related projects.
@@ -145,4 +151,4 @@ Active development. Features and APIs may evolve.
 > **Jetflow is, and always will be, open-source and free for everyone.**
 
 > [!NOTE]
-> Place the Holder.
+> For more info visit our website <placeholder>.
