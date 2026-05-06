@@ -151,4 +151,4 @@ Active development. Features and APIs may evolve.
 > **Jetflow is, and always will be, open-source and free for everyone.**
 
 > [!NOTE]
-> For more info visit our website <placeholder>.
+> For more info visit our [Documentation site](https://jetflow.js.org/docs).
