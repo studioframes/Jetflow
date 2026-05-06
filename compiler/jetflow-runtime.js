@@ -1,1073 +1,1466 @@
-/*!
- * JetFlow Runtime Engine
- * Browser-only Atomic-Class Workflow compiler for script-tag delivery.
- *
- * This file is intentionally self-contained so it can be published directly to
- * a CDN such as jsDelivr without a build step.
- */
-import importedConfig from "./jetflow.config.js";
+import _userConfig from "./jetflow.config.js";
 
-(function jetflowRuntime(global, document) {
+(function JetFlowEngine(global, document) {
   "use strict";
-
   if (!global || !document) return;
 
-  var STYLE_ID = "jetflow-runtime-style";
-  var VERSION = "0.1.0";
-  var TRANSFORM_VALUE = "translate3d(var(--jf-translate-x,0),var(--jf-translate-y,0),0) rotate(var(--jf-rotate,0)) skewX(var(--jf-skew-x,0)) skewY(var(--jf-skew-y,0)) scaleX(var(--jf-scale-x,1)) scaleY(var(--jf-scale-y,1))";
-  var FILTER_VALUE = "blur(var(--jf-blur,0)) brightness(var(--jf-brightness,1)) contrast(var(--jf-contrast,1)) grayscale(var(--jf-grayscale,0)) hue-rotate(var(--jf-hue-rotate,0deg)) invert(var(--jf-invert,0)) saturate(var(--jf-saturate,1)) sepia(var(--jf-sepia,0)) drop-shadow(var(--jf-drop-shadow,0 0 #0000))";
-  var BACKDROP_FILTER_VALUE = "blur(var(--jf-backdrop-blur,0)) brightness(var(--jf-backdrop-brightness,1)) contrast(var(--jf-backdrop-contrast,1)) grayscale(var(--jf-backdrop-grayscale,0)) hue-rotate(var(--jf-backdrop-hue-rotate,0deg)) invert(var(--jf-backdrop-invert,0)) opacity(var(--jf-backdrop-opacity,1)) saturate(var(--jf-backdrop-saturate,1)) sepia(var(--jf-backdrop-sepia,0))";
-  var RING_BOX_SHADOW = "var(--jf-ring-offset-shadow,0 0 #0000),var(--jf-ring-shadow,0 0 #0000),var(--jf-shadow,0 0 #0000)";
+  // ─── CONSTANTS ─────────────────────────────────────────────────────────────
+  var STYLE_ID  = "jf-runtime-style";
+  var VERSION   = "1.0.0";
+  var TRANSFORM = "translate3d(var(--jf-tx,0),var(--jf-ty,0),0) rotate(var(--jf-rotate,0)) skewX(var(--jf-skew-x,0)) skewY(var(--jf-skew-y,0)) scaleX(var(--jf-sx,1)) scaleY(var(--jf-sy,1))";
+  var FILTER    = "blur(var(--jf-blur,0)) brightness(var(--jf-brightness,1)) contrast(var(--jf-contrast,1)) grayscale(var(--jf-grayscale,0)) hue-rotate(var(--jf-hue-rotate,0deg)) invert(var(--jf-invert,0)) saturate(var(--jf-saturate,1)) sepia(var(--jf-sepia,0))";
+  var BF        = "blur(var(--jf-bd-blur,0)) brightness(var(--jf-bd-brightness,1)) contrast(var(--jf-bd-contrast,1)) grayscale(var(--jf-bd-grayscale,0)) hue-rotate(var(--jf-bd-hue-rotate,0deg)) invert(var(--jf-bd-invert,0)) saturate(var(--jf-bd-saturate,1)) sepia(var(--jf-bd-sepia,0))";
+  var RING      = "var(--jf-ring-offset-shadow,0 0 #0000),var(--jf-ring-shadow,0 0 #0000),var(--jf-shadow,0 0 #0000)";
 
+  // ─── SECURITY ──────────────────────────────────────────────────────────────
+  var RE_BLOCKED   = /url\s*\(|javascript\s*:|expression\s*\(|@import|data\s*:/i;
+  var RE_SAFE_CHARS = /^[#.,/()\s+\-*%0-9A-Za-z_]+$/;
+  var RE_HEX       = /^#[0-9a-fA-F]{3,8}$/;
+  var RE_UNIT      = /^-?\d*\.?\d+(px|rem|em|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|fr|deg|rad|turn|s|ms|svh|dvh|svw|dvw)$/i;
+  var RE_NUMBER    = /^-?\d*\.?\d+$/;
+  var RE_RGB       = /^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(\s*,\s*[\d.]+)?\s*\)$/;
+  var RE_HSL       = /^hsla?\(\s*[\d.]+\s*,\s*[\d.]+%\s*,\s*[\d.]+%(\s*,\s*[\d.]+)?\s*\)$/;
+  var ALLOWED_FNS  = { calc:1, rgb:1, rgba:1, hsl:1, hsla:1, "var":1, env:1, min:1, max:1, clamp:1 };
+
+  function sanitizeValue(v) {
+    if (v === null || v === undefined) return null;
+    var s = String(v).trim();
+    if (!s) return null;
+    if (RE_BLOCKED.test(s)) return null;
+    if (/[<>"';{}\\]/.test(s)) return null;
+    if (!isBalancedParens(s)) return null;
+    var fnRe = /([A-Za-z-]+)\s*\(/g, m;
+    while ((m = fnRe.exec(s))) {
+      if (!ALLOWED_FNS[m[1].toLowerCase()]) return null;
+    }
+    if (!RE_SAFE_CHARS.test(s)) return null;
+    return s;
+  }
+
+  function validateArbitrary(raw) {
+    // Stricter validation for arbitrary bracket values
+    if (!raw) return null;
+    var s = String(raw).trim().replace(/_/g, " ");
+    if (RE_BLOCKED.test(s)) return null;
+    if (/[<>"';{}\\]/.test(s)) return null;
+    if (RE_HEX.test(s))    return s;
+    if (RE_UNIT.test(s))   return s;
+    if (RE_NUMBER.test(s)) return s;
+    if (RE_RGB.test(s))    return s;
+    if (RE_HSL.test(s))    return s;
+    if (/^(transparent|currentColor|inherit|initial|unset|auto|none)$/.test(s)) return s;
+    if (/^calc\(/.test(s) && isBalancedParens(s))   return s;
+    if (/^var\(--[A-Za-z0-9_-]+(\,.+)?\)$/.test(s)) return s;
+    // Reject anything else
+    return null;
+  }
+
+  function isBalancedParens(s) {
+    var d = 0;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charAt(i);
+      if (c === "(") d++;
+      else if (c === ")") { d--; if (d < 0) return false; }
+    }
+    return d === 0;
+  }
+
+  function isSafeProp(p) {
+    return /^--[A-Za-z0-9_-]+$/.test(p) || /^-?[A-Za-z][A-Za-z0-9-]*$/.test(p);
+  }
+
+  // ─── CSS RESET ─────────────────────────────────────────────────────────────
+  var RESET_CSS = "*,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:currentColor}" +
+    "html{line-height:1.5;-webkit-text-size-adjust:100%;font-family:system-ui,sans-serif}" +
+    "body{margin:0;line-height:inherit}" +
+    "h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}" +
+    "a{color:inherit;text-decoration:inherit}" +
+    "b,strong{font-weight:bolder}" +
+    "button,input,optgroup,select,textarea{font-family:inherit;font-size:100%;font-weight:inherit;line-height:inherit;color:inherit;margin:0;padding:0}" +
+    "button,[type='button'],[type='reset'],[type='submit']{-webkit-appearance:button;background-color:transparent;background-image:none}" +
+    "img,svg,video,canvas,audio,iframe,embed,object{display:block;vertical-align:middle}" +
+    "img,video{max-width:100%;height:auto}" +
+    "table{border-collapse:collapse}" +
+    "@keyframes jf-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}" +
+    "@keyframes jf-ping{75%,100%{transform:scale(2);opacity:0}}" +
+    "@keyframes jf-pulse{0%,100%{opacity:1}50%{opacity:.5}}" +
+    "@keyframes jf-bounce{0%,100%{transform:translateY(-25%);animation-timing-function:cubic-bezier(0.8,0,1,1)}50%{transform:none;animation-timing-function:cubic-bezier(0,0,0.2,1)}}";
+
+  // ─── DEFAULT CONFIG ─────────────────────────────────────────────────────────
   var DEFAULT_CONFIG = {
-    autoStart: true,
+    darkMode: "media",
     reset: true,
     debug: false,
     mutationDebounce: 16,
-    darkMode: "both",
     important: false,
-    plugins: [],
-    screens: {
-      sm: "640px",
-      md: "768px",
-      lg: "1024px",
-      xl: "1280px",
-      "2xl": "1536px"
-    },
-    containers: {
-      xs: "20rem",
-      sm: "24rem",
-      md: "28rem",
-      lg: "32rem",
-      xl: "36rem",
-      "2xl": "42rem",
-      "3xl": "48rem",
-      "4xl": "56rem",
-      "5xl": "64rem",
-      "6xl": "72rem",
-      "7xl": "80rem"
-    },
+    screens: { sm:"640px", md:"768px", lg:"1024px", xl:"1280px", "2xl":"1536px" },
     safelist: [],
+    utilities: {},
     apply: {},
-    components: {},
-    utilities: {
-      "flex-center": "flex items-center justify-center",
-      "flex-between": "flex items-center justify-between",
-      "flex-around": "flex items-center justify-around",
-      "flex-evenly": "flex items-center justify-evenly",
-      "grid-center": "grid place-items-center",
-      "text-bold": "font-bold",
-      "text-muted": "text-gray-500",
-      box: "block rounded-md border border-gray-200 bg-white p-4",
-      "box-dark": "block rounded-md border border-slate-700 bg-slate-900 p-4"
-    },
     theme: {
-      colors: {
-        inherit: "inherit",
-        current: "currentColor",
-        transparent: "transparent",
-        black: "#000000",
-        white: "#ffffff",
-        slate: {
-          50: "#f8fafc",
-          100: "#f1f5f9",
-          200: "#e2e8f0",
-          300: "#cbd5e1",
-          400: "#94a3b8",
-          500: "#64748b",
-          600: "#475569",
-          700: "#334155",
-          800: "#1e293b",
-          900: "#0f172a",
-          950: "#020617"
-        },
-        gray: {
-          50: "#f9fafb",
-          100: "#f3f4f6",
-          200: "#e5e7eb",
-          300: "#d1d5db",
-          400: "#9ca3af",
-          500: "#6b7280",
-          600: "#4b5563",
-          700: "#374151",
-          800: "#1f2937",
-          900: "#111827",
-          950: "#030712"
-        },
-        red: {
-          50: "#fef2f2",
-          100: "#fee2e2",
-          200: "#fecaca",
-          300: "#fca5a5",
-          400: "#f87171",
-          500: "#ef4444",
-          600: "#dc2626",
-          700: "#b91c1c",
-          800: "#991b1b",
-          900: "#7f1d1d",
-          950: "#450a0a"
-        },
-        orange: {
-          50: "#fff7ed",
-          100: "#ffedd5",
-          200: "#fed7aa",
-          300: "#fdba74",
-          400: "#fb923c",
-          500: "#f97316",
-          600: "#ea580c",
-          700: "#c2410c",
-          800: "#9a3412",
-          900: "#7c2d12",
-          950: "#431407"
-        },
-        amber: {
-          50: "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#fbbf24",
-          500: "#f59e0b",
-          600: "#d97706",
-          700: "#b45309",
-          800: "#92400e",
-          900: "#78350f",
-          950: "#451a03"
-        },
-        yellow: {
-          50: "#fefce8",
-          100: "#fef9c3",
-          200: "#fef08a",
-          300: "#fde047",
-          400: "#facc15",
-          500: "#eab308",
-          600: "#ca8a04",
-          700: "#a16207",
-          800: "#854d0e",
-          900: "#713f12",
-          950: "#422006"
-        },
-        green: {
-          50: "#f0fdf4",
-          100: "#dcfce7",
-          200: "#bbf7d0",
-          300: "#86efac",
-          400: "#4ade80",
-          500: "#22c55e",
-          600: "#16a34a",
-          700: "#15803d",
-          800: "#166534",
-          900: "#14532d",
-          950: "#052e16"
-        },
-        emerald: {
-          50: "#ecfdf5",
-          100: "#d1fae5",
-          200: "#a7f3d0",
-          300: "#6ee7b7",
-          400: "#34d399",
-          500: "#10b981",
-          600: "#059669",
-          700: "#047857",
-          800: "#065f46",
-          900: "#064e3b",
-          950: "#022c22"
-        },
-        teal: {
-          50: "#f0fdfa",
-          100: "#ccfbf1",
-          200: "#99f6e4",
-          300: "#5eead4",
-          400: "#2dd4bf",
-          500: "#14b8a6",
-          600: "#0d9488",
-          700: "#0f766e",
-          800: "#115e59",
-          900: "#134e4a",
-          950: "#042f2e"
-        },
-        cyan: {
-          50: "#ecfeff",
-          100: "#cffafe",
-          200: "#a5f3fc",
-          300: "#67e8f9",
-          400: "#22d3ee",
-          500: "#06b6d4",
-          600: "#0891b2",
-          700: "#0e7490",
-          800: "#155e75",
-          900: "#164e63",
-          950: "#083344"
-        },
-        sky: {
-          50: "#f0f9ff",
-          100: "#e0f2fe",
-          200: "#bae6fd",
-          300: "#7dd3fc",
-          400: "#38bdf8",
-          500: "#0ea5e9",
-          600: "#0284c7",
-          700: "#0369a1",
-          800: "#075985",
-          900: "#0c4a6e",
-          950: "#082f49"
-        },
-        blue: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
-          800: "#1e40af",
-          900: "#1e3a8a",
-          950: "#172554"
-        },
-        indigo: {
-          50: "#eef2ff",
-          100: "#e0e7ff",
-          200: "#c7d2fe",
-          300: "#a5b4fc",
-          400: "#818cf8",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
-          800: "#3730a3",
-          900: "#312e81",
-          950: "#1e1b4b"
-        },
-        violet: {
-          50: "#f5f3ff",
-          100: "#ede9fe",
-          200: "#ddd6fe",
-          300: "#c4b5fd",
-          400: "#a78bfa",
-          500: "#8b5cf6",
-          600: "#7c3aed",
-          700: "#6d28d9",
-          800: "#5b21b6",
-          900: "#4c1d95",
-          950: "#2e1065"
-        },
-        purple: {
-          50: "#faf5ff",
-          100: "#f3e8ff",
-          200: "#e9d5ff",
-          300: "#d8b4fe",
-          400: "#c084fc",
-          500: "#a855f7",
-          600: "#9333ea",
-          700: "#7e22ce",
-          800: "#6b21a8",
-          900: "#581c87",
-          950: "#3b0764"
-        },
-        pink: {
-          50: "#fdf2f8",
-          100: "#fce7f3",
-          200: "#fbcfe8",
-          300: "#f9a8d4",
-          400: "#f472b6",
-          500: "#ec4899",
-          600: "#db2777",
-          700: "#be185d",
-          800: "#9d174d",
-          900: "#831843",
-          950: "#500724"
-        },
-        rose: {
-          50: "#fff1f2",
-          100: "#ffe4e6",
-          200: "#fecdd3",
-          300: "#fda4af",
-          400: "#fb7185",
-          500: "#f43f5e",
-          600: "#e11d48",
-          700: "#be123c",
-          800: "#9f1239",
-          900: "#881337",
-          950: "#4c0519"
-        }
-      },
-      spacing: {
-        0: "0px",
-        px: "1px",
-        0.5: "0.125rem",
-        1: "0.25rem",
-        1.5: "0.375rem",
-        2: "0.5rem",
-        2.5: "0.625rem",
-        3: "0.75rem",
-        3.5: "0.875rem",
-        4: "1rem",
-        5: "1.25rem",
-        6: "1.5rem",
-        7: "1.75rem",
-        8: "2rem",
-        9: "2.25rem",
-        10: "2.5rem",
-        11: "2.75rem",
-        12: "3rem",
-        14: "3.5rem",
-        16: "4rem",
-        20: "5rem",
-        24: "6rem",
-        28: "7rem",
-        32: "8rem",
-        36: "9rem",
-        40: "10rem",
-        44: "11rem",
-        48: "12rem",
-        52: "13rem",
-        56: "14rem",
-        60: "15rem",
-        64: "16rem",
-        72: "18rem",
-        80: "20rem",
-        96: "24rem"
-      },
-      fontSize: {
-        xs: ["0.75rem", "1rem"],
-        sm: ["0.875rem", "1.25rem"],
-        base: ["1rem", "1.5rem"],
-        lg: ["1.125rem", "1.75rem"],
-        xl: ["1.25rem", "1.75rem"],
-        "2xl": ["1.5rem", "2rem"],
-        "3xl": ["1.875rem", "2.25rem"],
-        "4xl": ["2.25rem", "2.5rem"],
-        "5xl": ["3rem", "1"],
-        "6xl": ["3.75rem", "1"],
-        "7xl": ["4.5rem", "1"],
-        "8xl": ["6rem", "1"],
-        "9xl": ["8rem", "1"]
-      },
-      fontWeight: {
-        thin: "100",
-        extralight: "200",
-        light: "300",
-        normal: "400",
-        medium: "500",
-        semibold: "600",
-        bold: "700",
-        extrabold: "800",
-        black: "900"
-      },
-      lineHeight: {
-        none: "1",
-        tight: "1.25",
-        snug: "1.375",
-        normal: "1.5",
-        relaxed: "1.625",
-        loose: "2",
-        3: ".75rem",
-        4: "1rem",
-        5: "1.25rem",
-        6: "1.5rem",
-        7: "1.75rem",
-        8: "2rem",
-        9: "2.25rem",
-        10: "2.5rem"
-      },
-      letterSpacing: {
-        tighter: "-0.05em",
-        tight: "-0.025em",
-        normal: "0em",
-        wide: "0.025em",
-        wider: "0.05em",
-        widest: "0.1em"
-      },
-      borderRadius: {
-        none: "0px",
-        sm: "0.125rem",
-        DEFAULT: "0.25rem",
-        md: "0.375rem",
-        lg: "0.5rem",
-        xl: "0.75rem",
-        "2xl": "1rem",
-        "3xl": "1.5rem",
-        full: "9999px"
-      },
-      borderWidth: {
-        DEFAULT: "1px",
-        0: "0px",
-        2: "2px",
-        4: "4px",
-        8: "8px"
-      },
-      opacity: {
-        0: "0",
-        5: "0.05",
-        10: "0.1",
-        20: "0.2",
-        25: "0.25",
-        30: "0.3",
-        40: "0.4",
-        50: "0.5",
-        60: "0.6",
-        70: "0.7",
-        75: "0.75",
-        80: "0.8",
-        90: "0.9",
-        95: "0.95",
-        100: "1"
-      },
-      boxShadow: {
-        sm: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-        DEFAULT: "0 1px 3px 0 rgb(0 0 0 / 0.1),0 1px 2px -1px rgb(0 0 0 / 0.1)",
-        md: "0 4px 6px -1px rgb(0 0 0 / 0.1),0 2px 4px -2px rgb(0 0 0 / 0.1)",
-        lg: "0 10px 15px -3px rgb(0 0 0 / 0.1),0 4px 6px -4px rgb(0 0 0 / 0.1)",
-        xl: "0 20px 25px -5px rgb(0 0 0 / 0.1),0 8px 10px -6px rgb(0 0 0 / 0.1)",
-        "2xl": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
-        inner: "inset 0 2px 4px 0 rgb(0 0 0 / 0.05)",
-        none: "0 0 #0000"
-      },
-      blur: {
-        none: "0",
-        sm: "4px",
-        DEFAULT: "8px",
-        md: "12px",
-        lg: "16px",
-        xl: "24px",
-        "2xl": "40px",
-        "3xl": "64px"
-      },
-      brightness: {
-        0: "0",
-        50: ".5",
-        75: ".75",
-        90: ".9",
-        95: ".95",
-        100: "1",
-        105: "1.05",
-        110: "1.1",
-        125: "1.25",
-        150: "1.5",
-        200: "2"
-      },
-      contrast: {
-        0: "0",
-        50: ".5",
-        75: ".75",
-        100: "1",
-        125: "1.25",
-        150: "1.5",
-        200: "2"
-      },
-      saturate: {
-        0: "0",
-        50: ".5",
-        100: "1",
-        150: "1.5",
-        200: "2"
-      },
-      hueRotate: {
-        0: "0deg",
-        15: "15deg",
-        30: "30deg",
-        60: "60deg",
-        90: "90deg",
-        180: "180deg"
-      },
-      zIndex: {
-        0: "0",
-        10: "10",
-        20: "20",
-        30: "30",
-        40: "40",
-        50: "50",
-        auto: "auto"
-      },
-      transitionDuration: {
-        0: "0ms",
-        75: "75ms",
-        100: "100ms",
-        150: "150ms",
-        200: "200ms",
-        300: "300ms",
-        500: "500ms",
-        700: "700ms",
-        1000: "1000ms"
-      },
-      transitionTiming: {
-        linear: "linear",
-        in: "cubic-bezier(0.4,0,1,1)",
-        out: "cubic-bezier(0,0,0.2,1)",
-        "in-out": "cubic-bezier(0.4,0,0.2,1)"
-      },
-      aspectRatio: {
-        auto: "auto",
-        square: "1 / 1",
-        video: "16 / 9"
-      },
-      animation: {
-        none: "none",
-        spin: "jf-spin 1s linear infinite",
-        ping: "jf-ping 1s cubic-bezier(0,0,0.2,1) infinite",
-        pulse: "jf-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite",
-        bounce: "jf-bounce 1s infinite"
-      }
+      colors: {}, spacing: {}, fontSize: {}, fontWeight: {},
+      lineHeight: {}, letterSpacing: {}, borderRadius: {}, borderWidth: {},
+      opacity: {}, boxShadow: {}, blur: {}, zIndex: {},
+      transitionDuration: {}, transitionTimingFunction: {}, animation: {}
     }
   };
 
-  var KEYFRAMES = {
-    spin: "@keyframes jf-spin{to{transform:rotate(360deg)}}",
-    ping: "@keyframes jf-ping{75%,100%{transform:scale(2);opacity:0}}",
-    pulse: "@keyframes jf-pulse{50%{opacity:.5}}",
-    bounce: "@keyframes jf-bounce{0%,100%{transform:translateY(-25%);animation-timing-function:cubic-bezier(.8,0,1,1)}50%{transform:none;animation-timing-function:cubic-bezier(0,0,.2,1)}}"
+  // ─── PSEUDO / VARIANT MAPS ─────────────────────────────────────────────────
+  var PSEUDO = {
+    hover: ":hover", focus: ":focus", active: ":active",
+    visited: ":visited", disabled: ":disabled", enabled: ":enabled",
+    checked: ":checked", invalid: ":invalid", valid: ":valid",
+    required: ":required", optional: ":optional",
+    "focus-within": ":focus-within", "focus-visible": ":focus-visible",
+    first: ":first-child", last: ":last-child", only: ":only-child",
+    odd: ":nth-child(odd)", even: ":nth-child(even)",
+    empty: ":empty", target: ":target", open: "[open]",
+    "placeholder-shown": ":placeholder-shown",
+    "read-only": ":read-only", "read-write": ":read-write",
+    "not-checked": ":not(:checked)"
   };
 
-  var RESET_CSS = "*,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:currentColor}html{line-height:1.5;-webkit-text-size-adjust:100%;tab-size:4;font-family:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;font-feature-settings:normal;font-variation-settings:normal}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,samp,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,[type=button],[type=reset],[type=submit]{-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dl,dd,h1,h2,h3,h4,h5,h6,hr,figure,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}ol,ul,menu{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}button,[role=button]{cursor:pointer}:disabled{cursor:default}img,svg,video,canvas,audio,iframe,embed,object{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]{display:none}";
+  // ─── STATIC UTILITIES (keyword-only, no value) ────────────────────────────
+  function buildStaticMap() {
+    var R = RING, T = TRANSFORM, F = FILTER, B = BF;
+    return {
+      // display
+      block:{"display":"block"}, "inline-block":{"display":"inline-block"},
+      inline:{"display":"inline"}, flex:{"display":"flex"},
+      "inline-flex":{"display":"inline-flex"}, grid:{"display":"grid"},
+      "inline-grid":{"display":"inline-grid"}, table:{"display":"table"},
+      "table-row":{"display":"table-row"}, "table-cell":{"display":"table-cell"},
+      contents:{"display":"contents"}, hidden:{"display":"none"},
+      // position
+      static:{"position":"static"}, fixed:{"position":"fixed"},
+      absolute:{"position":"absolute"}, relative:{"position":"relative"},
+      sticky:{"position":"sticky"},
+      // flexbox
+      "flex-row":{"flex-direction":"row"}, "flex-row-reverse":{"flex-direction":"row-reverse"},
+      "flex-col":{"flex-direction":"column"}, "flex-col-reverse":{"flex-direction":"column-reverse"},
+      "flex-wrap":{"flex-wrap":"wrap"}, "flex-nowrap":{"flex-wrap":"nowrap"},
+      "flex-wrap-reverse":{"flex-wrap":"wrap-reverse"},
+      "flex-1":{"flex":"1 1 0%"}, "flex-auto":{"flex":"1 1 auto"},
+      "flex-initial":{"flex":"0 1 auto"}, "flex-none":{"flex":"none"},
+      "flex-grow":{"flex-grow":"1"}, "flex-grow-0":{"flex-grow":"0"},
+      "flex-shrink":{"flex-shrink":"1"}, "flex-shrink-0":{"flex-shrink":"0"},
+      grow:{"flex-grow":"1"}, "grow-0":{"flex-grow":"0"},
+      shrink:{"flex-shrink":"1"}, "shrink-0":{"flex-shrink":"0"},
+      // items / justify / content / self
+      "items-start":{"align-items":"flex-start"}, "items-end":{"align-items":"flex-end"},
+      "items-center":{"align-items":"center"}, "items-baseline":{"align-items":"baseline"},
+      "items-stretch":{"align-items":"stretch"},
+      "justify-start":{"justify-content":"flex-start"}, "justify-end":{"justify-content":"flex-end"},
+      "justify-center":{"justify-content":"center"}, "justify-between":{"justify-content":"space-between"},
+      "justify-around":{"justify-content":"space-around"}, "justify-evenly":{"justify-content":"space-evenly"},
+      "justify-stretch":{"justify-content":"stretch"},
+      "justify-items-start":{"justify-items":"start"}, "justify-items-end":{"justify-items":"end"},
+      "justify-items-center":{"justify-items":"center"}, "justify-items-stretch":{"justify-items":"stretch"},
+      "justify-self-auto":{"justify-self":"auto"}, "justify-self-start":{"justify-self":"start"},
+      "justify-self-end":{"justify-self":"end"}, "justify-self-center":{"justify-self":"center"},
+      "justify-self-stretch":{"justify-self":"stretch"},
+      "content-start":{"align-content":"flex-start"}, "content-end":{"align-content":"flex-end"},
+      "content-center":{"align-content":"center"}, "content-between":{"align-content":"space-between"},
+      "content-around":{"align-content":"space-around"}, "content-evenly":{"align-content":"space-evenly"},
+      "content-baseline":{"align-content":"baseline"}, "content-stretch":{"align-content":"stretch"},
+      "self-auto":{"align-self":"auto"}, "self-start":{"align-self":"flex-start"},
+      "self-end":{"align-self":"flex-end"}, "self-center":{"align-self":"center"},
+      "self-stretch":{"align-self":"stretch"}, "self-baseline":{"align-self":"baseline"},
+      "place-items-start":{"place-items":"start"}, "place-items-end":{"place-items":"end"},
+      "place-items-center":{"place-items":"center"}, "place-items-stretch":{"place-items":"stretch"},
+      "place-content-start":{"place-content":"start"}, "place-content-end":{"place-content":"end"},
+      "place-content-center":{"place-content":"center"}, "place-content-between":{"place-content":"space-between"},
+      "place-content-around":{"place-content":"space-around"}, "place-content-evenly":{"place-content":"space-evenly"},
+      "place-content-stretch":{"place-content":"stretch"},
+      "place-self-auto":{"place-self":"auto"}, "place-self-start":{"place-self":"start"},
+      "place-self-end":{"place-self":"end"}, "place-self-center":{"place-self":"center"},
+      "place-self-stretch":{"place-self":"stretch"},
+      // overflow
+      "overflow-auto":{"overflow":"auto"}, "overflow-hidden":{"overflow":"hidden"},
+      "overflow-visible":{"overflow":"visible"}, "overflow-scroll":{"overflow":"scroll"},
+      "overflow-x-auto":{"overflow-x":"auto"}, "overflow-y-auto":{"overflow-y":"auto"},
+      "overflow-x-hidden":{"overflow-x":"hidden"}, "overflow-y-hidden":{"overflow-y":"hidden"},
+      "overflow-x-scroll":{"overflow-x":"scroll"}, "overflow-y-scroll":{"overflow-y":"scroll"},
+      "overscroll-auto":{"overscroll-behavior":"auto"}, "overscroll-contain":{"overscroll-behavior":"contain"},
+      "overscroll-none":{"overscroll-behavior":"none"},
+      // visibility
+      visible:{"visibility":"visible"}, invisible:{"visibility":"hidden"},
+      collapse:{"visibility":"collapse"},
+      // sizing keywords
+      "w-auto":{"width":"auto"}, "h-auto":{"height":"auto"},
+      "w-full":{"width":"100%"}, "h-full":{"height":"100%"},
+      "w-screen":{"width":"100vw"}, "h-screen":{"height":"100vh"},
+      "w-svw":{"width":"100svw"}, "h-svh":{"height":"100svh"},
+      "w-dvw":{"width":"100dvw"}, "h-dvh":{"height":"100dvh"},
+      "w-min":{"width":"min-content"}, "h-min":{"height":"min-content"},
+      "w-max":{"width":"max-content"}, "h-max":{"height":"max-content"},
+      "w-fit":{"width":"fit-content"}, "h-fit":{"height":"fit-content"},
+      "min-w-0":{"min-width":"0px"}, "min-w-full":{"min-width":"100%"},
+      "min-w-min":{"min-width":"min-content"}, "min-w-max":{"min-width":"max-content"},
+      "min-w-fit":{"min-width":"fit-content"},
+      "max-w-none":{"max-width":"none"}, "max-w-full":{"max-width":"100%"},
+      "max-w-min":{"max-width":"min-content"}, "max-w-max":{"max-width":"max-content"},
+      "max-w-fit":{"max-width":"fit-content"}, "max-w-screen-sm":{"max-width":"640px"},
+      "max-w-screen-md":{"max-width":"768px"}, "max-w-screen-lg":{"max-width":"1024px"},
+      "max-w-screen-xl":{"max-width":"1280px"}, "max-w-screen-2xl":{"max-width":"1536px"},
+      "min-h-0":{"min-height":"0px"}, "min-h-full":{"min-height":"100%"},
+      "min-h-screen":{"min-height":"100vh"}, "min-h-svh":{"min-height":"100svh"},
+      "min-h-dvh":{"min-height":"100dvh"}, "min-h-min":{"min-height":"min-content"},
+      "min-h-max":{"min-height":"max-content"}, "min-h-fit":{"min-height":"fit-content"},
+      "max-h-none":{"max-height":"none"}, "max-h-full":{"max-height":"100%"},
+      "max-h-screen":{"max-height":"100vh"}, "max-h-svh":{"max-height":"100svh"},
+      "max-h-dvh":{"max-height":"100dvh"},
+      // text
+      "text-left":{"text-align":"left"}, "text-center":{"text-align":"center"},
+      "text-right":{"text-align":"right"}, "text-justify":{"text-align":"justify"},
+      "text-start":{"text-align":"start"}, "text-end":{"text-align":"end"},
+      italic:{"font-style":"italic"}, "not-italic":{"font-style":"normal"},
+      uppercase:{"text-transform":"uppercase"}, lowercase:{"text-transform":"lowercase"},
+      capitalize:{"text-transform":"capitalize"}, "normal-case":{"text-transform":"none"},
+      underline:{"text-decoration-line":"underline"}, overline:{"text-decoration-line":"overline"},
+      "line-through":{"text-decoration-line":"line-through"}, "no-underline":{"text-decoration-line":"none"},
+      antialiased:{"-webkit-font-smoothing":"antialiased","-moz-osx-font-smoothing":"grayscale"},
+      "subpixel-antialiased":{"-webkit-font-smoothing":"auto","-moz-osx-font-smoothing":"auto"},
+      truncate:{"overflow":"hidden","text-overflow":"ellipsis","white-space":"nowrap"},
+      "text-ellipsis":{"text-overflow":"ellipsis"}, "text-clip":{"text-overflow":"clip"},
+      "whitespace-normal":{"white-space":"normal"}, "whitespace-nowrap":{"white-space":"nowrap"},
+      "whitespace-pre":{"white-space":"pre"}, "whitespace-pre-line":{"white-space":"pre-line"},
+      "whitespace-pre-wrap":{"white-space":"pre-wrap"},
+      "break-normal":{"overflow-wrap":"normal","word-break":"normal"},
+      "break-words":{"overflow-wrap":"break-word"}, "break-all":{"word-break":"break-all"},
+      "align-baseline":{"vertical-align":"baseline"}, "align-top":{"vertical-align":"top"},
+      "align-middle":{"vertical-align":"middle"}, "align-bottom":{"vertical-align":"bottom"},
+      "align-text-top":{"vertical-align":"text-top"}, "align-text-bottom":{"vertical-align":"text-bottom"},
+      // background
+      "bg-fixed":{"background-attachment":"fixed"}, "bg-local":{"background-attachment":"local"},
+      "bg-scroll":{"background-attachment":"scroll"},
+      "bg-clip-border":{"background-clip":"border-box"}, "bg-clip-padding":{"background-clip":"padding-box"},
+      "bg-clip-content":{"background-clip":"content-box"},
+      "bg-clip-text":{"background-clip":"text","-webkit-background-clip":"text","color":"transparent"},
+      "bg-origin-border":{"background-origin":"border-box"}, "bg-origin-padding":{"background-origin":"padding-box"},
+      "bg-origin-content":{"background-origin":"content-box"},
+      "bg-bottom":{"background-position":"bottom"}, "bg-center":{"background-position":"center"},
+      "bg-left":{"background-position":"left"}, "bg-left-bottom":{"background-position":"left bottom"},
+      "bg-left-top":{"background-position":"left top"}, "bg-right":{"background-position":"right"},
+      "bg-right-bottom":{"background-position":"right bottom"}, "bg-right-top":{"background-position":"right top"},
+      "bg-top":{"background-position":"top"},
+      "bg-repeat":{"background-repeat":"repeat"}, "bg-no-repeat":{"background-repeat":"no-repeat"},
+      "bg-repeat-x":{"background-repeat":"repeat-x"}, "bg-repeat-y":{"background-repeat":"repeat-y"},
+      "bg-auto":{"background-size":"auto"}, "bg-cover":{"background-size":"cover"},
+      "bg-contain":{"background-size":"contain"},
+      // border
+      "border-solid":{"border-style":"solid"}, "border-dashed":{"border-style":"dashed"},
+      "border-dotted":{"border-style":"dotted"}, "border-double":{"border-style":"double"},
+      "border-hidden":{"border-style":"hidden"}, "border-none":{"border-style":"none"},
+      "rounded-none":{"border-radius":"0px"},
+      "outline-none":{"outline":"2px solid transparent","outline-offset":"2px"},
+      outline:{"outline-style":"solid"}, "outline-dashed":{"outline-style":"dashed"},
+      "outline-dotted":{"outline-style":"dotted"}, "outline-double":{"outline-style":"double"},
+      "outline-offset-0":{"outline-offset":"0px"},
+      // shadow / opacity
+      "shadow-none":{"--jf-shadow":"0 0 #0000","box-shadow":R},
+      "opacity-0":{"opacity":"0"}, "opacity-100":{"opacity":"1"},
+      // filter
+      filter:{"filter":F}, "filter-none":{"filter":"none"},
+      "backdrop-filter":{"-webkit-backdrop-filter":B,"backdrop-filter":B},
+      "backdrop-filter-none":{"-webkit-backdrop-filter":"none","backdrop-filter":"none"},
+      grayscale:{"--jf-grayscale":"1","filter":F}, "grayscale-0":{"--jf-grayscale":"0","filter":F},
+      invert:{"--jf-invert":"1","filter":F}, "invert-0":{"--jf-invert":"0","filter":F},
+      sepia:{"--jf-sepia":"1","filter":F}, "sepia-0":{"--jf-sepia":"0","filter":F},
+      "backdrop-grayscale":{"--jf-bd-grayscale":"1","-webkit-backdrop-filter":B,"backdrop-filter":B},
+      "backdrop-invert":{"--jf-bd-invert":"1","-webkit-backdrop-filter":B,"backdrop-filter":B},
+      "backdrop-sepia":{"--jf-bd-sepia":"1","-webkit-backdrop-filter":B,"backdrop-filter":B},
+      // aspect ratio
+      "aspect-auto":{"aspect-ratio":"auto"}, "aspect-square":{"aspect-ratio":"1/1"},
+      "aspect-video":{"aspect-ratio":"16/9"},
+      // ring
+      "ring-inset":{"--jf-ring-inset":"inset","box-shadow":R},
+      ring:_ringW("3px"), "ring-0":_ringW("0px"), "ring-1":_ringW("1px"),
+      "ring-2":_ringW("2px"), "ring-4":_ringW("4px"), "ring-8":_ringW("8px"),
+      "ring-offset-0":_ringOff("0px"), "ring-offset-1":_ringOff("1px"),
+      "ring-offset-2":_ringOff("2px"), "ring-offset-4":_ringOff("4px"),
+      // transition
+      "transition-none":{"transition-property":"none"},
+      transition:{"transition-property":"color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter","transition-timing-function":"cubic-bezier(0.4,0,0.2,1)","transition-duration":"150ms"},
+      "transition-all":{"transition-property":"all","transition-timing-function":"cubic-bezier(0.4,0,0.2,1)","transition-duration":"150ms"},
+      "transition-colors":{"transition-property":"color,background-color,border-color,text-decoration-color,fill,stroke","transition-timing-function":"cubic-bezier(0.4,0,0.2,1)","transition-duration":"150ms"},
+      "transition-opacity":{"transition-property":"opacity","transition-timing-function":"cubic-bezier(0.4,0,0.2,1)","transition-duration":"150ms"},
+      "transition-shadow":{"transition-property":"box-shadow","transition-timing-function":"cubic-bezier(0.4,0,0.2,1)","transition-duration":"150ms"},
+      "transition-transform":{"transition-property":"transform","transition-timing-function":"cubic-bezier(0.4,0,0.2,1)","transition-duration":"150ms"},
+      // transform
+      transform:{"transform":T}, "transform-none":{"transform":"none"},
+      "origin-center":{"transform-origin":"center"}, "origin-top":{"transform-origin":"top"},
+      "origin-top-right":{"transform-origin":"top right"}, "origin-right":{"transform-origin":"right"},
+      "origin-bottom-right":{"transform-origin":"bottom right"}, "origin-bottom":{"transform-origin":"bottom"},
+      "origin-bottom-left":{"transform-origin":"bottom left"}, "origin-left":{"transform-origin":"left"},
+      "origin-top-left":{"transform-origin":"top left"},
+      "scale-0":_scale("0"), "scale-50":_scale(".5"), "scale-75":_scale(".75"),
+      "scale-90":_scale(".9"), "scale-95":_scale(".95"), "scale-100":_scale("1"),
+      "scale-105":_scale("1.05"), "scale-110":_scale("1.1"), "scale-125":_scale("1.25"), "scale-150":_scale("1.5"),
+      "rotate-0":_rot("0deg"), "rotate-1":_rot("1deg"), "rotate-2":_rot("2deg"),
+      "rotate-3":_rot("3deg"), "rotate-6":_rot("6deg"), "rotate-12":_rot("12deg"),
+      "rotate-45":_rot("45deg"), "rotate-90":_rot("90deg"), "rotate-180":_rot("180deg"),
+      // cursor
+      "cursor-auto":{"cursor":"auto"}, "cursor-default":{"cursor":"default"},
+      "cursor-pointer":{"cursor":"pointer"}, "cursor-wait":{"cursor":"wait"},
+      "cursor-text":{"cursor":"text"}, "cursor-move":{"cursor":"move"},
+      "cursor-help":{"cursor":"help"}, "cursor-not-allowed":{"cursor":"not-allowed"},
+      "cursor-none":{"cursor":"none"}, "cursor-grab":{"cursor":"grab"},
+      "cursor-grabbing":{"cursor":"grabbing"},
+      // user-select
+      "select-none":{"-webkit-user-select":"none","user-select":"none"},
+      "select-text":{"-webkit-user-select":"text","user-select":"text"},
+      "select-all":{"-webkit-user-select":"all","user-select":"all"},
+      "select-auto":{"-webkit-user-select":"auto","user-select":"auto"},
+      // pointer-events
+      "pointer-events-none":{"pointer-events":"none"}, "pointer-events-auto":{"pointer-events":"auto"},
+      // resize
+      resize:{"resize":"both"}, "resize-none":{"resize":"none"},
+      "resize-x":{"resize":"horizontal"}, "resize-y":{"resize":"vertical"},
+      // list
+      "list-none":{"list-style-type":"none"}, "list-disc":{"list-style-type":"disc"},
+      "list-decimal":{"list-style-type":"decimal"},
+      // misc
+      "appearance-none":{"appearance":"none"}, "appearance-auto":{"appearance":"auto"},
+      "animate-none":{"animation":"none"},
+      "isolate":{"isolation":"isolate"}, "isolation-auto":{"isolation":"auto"},
+      "object-contain":{"object-fit":"contain"}, "object-cover":{"object-fit":"cover"},
+      "object-fill":{"object-fit":"fill"}, "object-none":{"object-fit":"none"},
+      "object-scale-down":{"object-fit":"scale-down"},
+      "sr-only":{"position":"absolute","width":"1px","height":"1px","padding":"0","margin":"-1px","overflow":"hidden","clip":"rect(0,0,0,0)","white-space":"nowrap","border-width":"0"},
+      "not-sr-only":{"position":"static","width":"auto","height":"auto","padding":"0","margin":"0","overflow":"visible","clip":"auto","white-space":"normal"},
+      "float-right":{"float":"right"}, "float-left":{"float":"left"}, "float-none":{"float":"none"},
+      "clear-left":{"clear":"left"}, "clear-right":{"clear":"right"},
+      "clear-both":{"clear":"both"}, "clear-none":{"clear":"none"},
+      "box-border":{"box-sizing":"border-box"}, "box-content":{"box-sizing":"content-box"},
+      "decoration-clone":{"-webkit-box-decoration-break":"clone","box-decoration-break":"clone"},
+      "decoration-slice":{"-webkit-box-decoration-break":"slice","box-decoration-break":"slice"},
+      "indent-0":{"text-indent":"0px"},
+      "columns-auto":{"columns":"auto"}
+    };
+  }
 
-  var directUtilities = {
-    "sr-only": {
-      position: "absolute",
-      width: "1px",
-      height: "1px",
-      padding: "0",
-      margin: "-1px",
-      overflow: "hidden",
-      clip: "rect(0,0,0,0)",
-      "white-space": "nowrap",
-      "border-width": "0"
-    },
-    "not-sr-only": {
-      position: "static",
-      width: "auto",
-      height: "auto",
-      padding: "0",
-      margin: "0",
-      overflow: "visible",
-      clip: "auto",
-      "white-space": "normal"
-    },
-    visible: { visibility: "visible" },
-    invisible: { visibility: "hidden" },
-    collapse: { visibility: "collapse" },
-    static: { position: "static" },
-    fixed: { position: "fixed" },
-    absolute: { position: "absolute" },
-    relative: { position: "relative" },
-    sticky: { position: "sticky" },
-    isolate: { isolation: "isolate" },
-    "isolation-auto": { isolation: "auto" },
-    block: { display: "block" },
-    inline: { display: "inline" },
-    "inline-block": { display: "inline-block" },
-    flex: { display: "flex" },
-    "inline-flex": { display: "inline-flex" },
-    grid: { display: "grid" },
-    "inline-grid": { display: "inline-grid" },
-    contents: { display: "contents" },
-    hidden: { display: "none" },
-    table: { display: "table" },
-    "table-row": { display: "table-row" },
-    "table-cell": { display: "table-cell" },
-    "flow-root": { display: "flow-root" },
-    "flex-row": { "flex-direction": "row" },
-    "flex-row-reverse": { "flex-direction": "row-reverse" },
-    "flex-col": { "flex-direction": "column" },
-    "flex-col-reverse": { "flex-direction": "column-reverse" },
-    "flex-wrap": { "flex-wrap": "wrap" },
-    "flex-wrap-reverse": { "flex-wrap": "wrap-reverse" },
-    "flex-nowrap": { "flex-wrap": "nowrap" },
-    "flex-1": { flex: "1 1 0%" },
-    "flex-auto": { flex: "1 1 auto" },
-    "flex-initial": { flex: "0 1 auto" },
-    "flex-none": { flex: "none" },
-    grow: { "flex-grow": "1" },
-    "grow-0": { "flex-grow": "0" },
-    shrink: { "flex-shrink": "1" },
-    "shrink-0": { "flex-shrink": "0" },
-    "basis-auto": { "flex-basis": "auto" },
-    "basis-full": { "flex-basis": "100%" },
-    "grid-flow-row": { "grid-auto-flow": "row" },
-    "grid-flow-col": { "grid-auto-flow": "column" },
-    "grid-flow-dense": { "grid-auto-flow": "dense" },
-    "grid-flow-row-dense": { "grid-auto-flow": "row dense" },
-    "grid-flow-col-dense": { "grid-auto-flow": "column dense" },
-    "grid-cols-none": { "grid-template-columns": "none" },
-    "grid-cols-subgrid": { "grid-template-columns": "subgrid" },
-    "grid-rows-none": { "grid-template-rows": "none" },
-    "grid-rows-subgrid": { "grid-template-rows": "subgrid" },
-    "col-auto": { "grid-column": "auto" },
-    "col-span-full": { "grid-column": "1 / -1" },
-    "col-start-auto": { "grid-column-start": "auto" },
-    "col-end-auto": { "grid-column-end": "auto" },
-    "row-auto": { "grid-row": "auto" },
-    "row-span-full": { "grid-row": "1 / -1" },
-    "row-start-auto": { "grid-row-start": "auto" },
-    "row-end-auto": { "grid-row-end": "auto" },
-    "float-right": { float: "right" },
-    "float-left": { float: "left" },
-    "float-none": { float: "none" },
-    clear: { clear: "both" },
-    "clear-left": { clear: "left" },
-    "clear-right": { clear: "right" },
-    "clear-both": { clear: "both" },
-    "clear-none": { clear: "none" },
-    "object-contain": { "object-fit": "contain" },
-    "object-cover": { "object-fit": "cover" },
-    "object-fill": { "object-fit": "fill" },
-    "object-none": { "object-fit": "none" },
-    "object-scale-down": { "object-fit": "scale-down" },
-    "overflow-auto": { overflow: "auto" },
-    "overflow-hidden": { overflow: "hidden" },
-    "overflow-clip": { overflow: "clip" },
-    "overflow-visible": { overflow: "visible" },
-    "overflow-scroll": { overflow: "scroll" },
-    "overflow-x-auto": { "overflow-x": "auto" },
-    "overflow-y-auto": { "overflow-y": "auto" },
-    "overflow-x-hidden": { "overflow-x": "hidden" },
-    "overflow-y-hidden": { "overflow-y": "hidden" },
-    "overflow-x-clip": { "overflow-x": "clip" },
-    "overflow-y-clip": { "overflow-y": "clip" },
-    "overflow-x-visible": { "overflow-x": "visible" },
-    "overflow-y-visible": { "overflow-y": "visible" },
-    "overflow-x-scroll": { "overflow-x": "scroll" },
-    "overflow-y-scroll": { "overflow-y": "scroll" },
-    "overscroll-auto": { "overscroll-behavior": "auto" },
-    "overscroll-contain": { "overscroll-behavior": "contain" },
-    "overscroll-none": { "overscroll-behavior": "none" },
-    "box-border": { "box-sizing": "border-box" },
-    "box-content": { "box-sizing": "content-box" },
-    "container": { width: "100%", "container-type": "inline-size" },
-    "container-normal": { "container-type": "normal" },
-    "container-inline": { "container-type": "inline-size" },
-    "container-size": { "container-type": "size" },
-    "items-start": { "align-items": "flex-start" },
-    "items-end": { "align-items": "flex-end" },
-    "items-center": { "align-items": "center" },
-    "items-baseline": { "align-items": "baseline" },
-    "items-stretch": { "align-items": "stretch" },
-    "content-normal": { "align-content": "normal" },
-    "content-center": { "align-content": "center" },
-    "content-start": { "align-content": "flex-start" },
-    "content-end": { "align-content": "flex-end" },
-    "content-between": { "align-content": "space-between" },
-    "content-around": { "align-content": "space-around" },
-    "content-evenly": { "align-content": "space-evenly" },
-    "content-baseline": { "align-content": "baseline" },
-    "self-auto": { "align-self": "auto" },
-    "self-start": { "align-self": "flex-start" },
-    "self-end": { "align-self": "flex-end" },
-    "self-center": { "align-self": "center" },
-    "self-stretch": { "align-self": "stretch" },
-    "self-baseline": { "align-self": "baseline" },
-    "justify-normal": { "justify-content": "normal" },
-    "justify-start": { "justify-content": "flex-start" },
-    "justify-end": { "justify-content": "flex-end" },
-    "justify-center": { "justify-content": "center" },
-    "justify-between": { "justify-content": "space-between" },
-    "justify-around": { "justify-content": "space-around" },
-    "justify-evenly": { "justify-content": "space-evenly" },
-    "justify-stretch": { "justify-content": "stretch" },
-    "justify-items-start": { "justify-items": "start" },
-    "justify-items-end": { "justify-items": "end" },
-    "justify-items-center": { "justify-items": "center" },
-    "justify-items-stretch": { "justify-items": "stretch" },
-    "justify-self-auto": { "justify-self": "auto" },
-    "justify-self-start": { "justify-self": "start" },
-    "justify-self-end": { "justify-self": "end" },
-    "justify-self-center": { "justify-self": "center" },
-    "justify-self-stretch": { "justify-self": "stretch" },
-    "place-content-center": { "place-content": "center" },
-    "place-content-start": { "place-content": "start" },
-    "place-content-end": { "place-content": "end" },
-    "place-content-between": { "place-content": "space-between" },
-    "place-content-around": { "place-content": "space-around" },
-    "place-content-evenly": { "place-content": "space-evenly" },
-    "place-content-baseline": { "place-content": "baseline" },
-    "place-content-stretch": { "place-content": "stretch" },
-    "place-items-start": { "place-items": "start" },
-    "place-items-end": { "place-items": "end" },
-    "place-items-center": { "place-items": "center" },
-    "place-items-baseline": { "place-items": "baseline" },
-    "place-items-stretch": { "place-items": "stretch" },
-    "place-self-auto": { "place-self": "auto" },
-    "place-self-start": { "place-self": "start" },
-    "place-self-end": { "place-self": "end" },
-    "place-self-center": { "place-self": "center" },
-    "place-self-stretch": { "place-self": "stretch" },
-    "text-left": { "text-align": "left" },
-    "text-center": { "text-align": "center" },
-    "text-right": { "text-align": "right" },
-    "text-justify": { "text-align": "justify" },
-    "text-start": { "text-align": "start" },
-    "text-end": { "text-align": "end" },
-    italic: { "font-style": "italic" },
-    "not-italic": { "font-style": "normal" },
-    uppercase: { "text-transform": "uppercase" },
-    lowercase: { "text-transform": "lowercase" },
-    capitalize: { "text-transform": "capitalize" },
-    "normal-case": { "text-transform": "none" },
-    underline: { "text-decoration-line": "underline" },
-    overline: { "text-decoration-line": "overline" },
-    "line-through": { "text-decoration-line": "line-through" },
-    "no-underline": { "text-decoration-line": "none" },
-    antialiased: {
-      "-webkit-font-smoothing": "antialiased",
-      "-moz-osx-font-smoothing": "grayscale"
-    },
-    "subpixel-antialiased": {
-      "-webkit-font-smoothing": "auto",
-      "-moz-osx-font-smoothing": "auto"
-    },
-    truncate: {
-      overflow: "hidden",
-      "text-overflow": "ellipsis",
-      "white-space": "nowrap"
-    },
-    "text-ellipsis": { "text-overflow": "ellipsis" },
-    "text-clip": { "text-overflow": "clip" },
-    "whitespace-normal": { "white-space": "normal" },
-    "whitespace-nowrap": { "white-space": "nowrap" },
-    "whitespace-pre": { "white-space": "pre" },
-    "whitespace-pre-line": { "white-space": "pre-line" },
-    "whitespace-pre-wrap": { "white-space": "pre-wrap" },
-    "whitespace-break-spaces": { "white-space": "break-spaces" },
-    "break-normal": { "overflow-wrap": "normal", "word-break": "normal" },
-    "break-words": { "overflow-wrap": "break-word" },
-    "break-all": { "word-break": "break-all" },
-    "break-keep": { "word-break": "keep-all" },
-    "align-baseline": { "vertical-align": "baseline" },
-    "align-top": { "vertical-align": "top" },
-    "align-middle": { "vertical-align": "middle" },
-    "align-bottom": { "vertical-align": "bottom" },
-    "align-text-top": { "vertical-align": "text-top" },
-    "align-text-bottom": { "vertical-align": "text-bottom" },
-    "align-sub": { "vertical-align": "sub" },
-    "align-super": { "vertical-align": "super" },
-    "bg-fixed": { "background-attachment": "fixed" },
-    "bg-local": { "background-attachment": "local" },
-    "bg-scroll": { "background-attachment": "scroll" },
-    "bg-clip-border": { "background-clip": "border-box" },
-    "bg-clip-padding": { "background-clip": "padding-box" },
-    "bg-clip-content": { "background-clip": "content-box" },
-    "bg-clip-text": { "background-clip": "text", "-webkit-background-clip": "text", color: "transparent" },
-    "bg-origin-border": { "background-origin": "border-box" },
-    "bg-origin-padding": { "background-origin": "padding-box" },
-    "bg-origin-content": { "background-origin": "content-box" },
-    "bg-bottom": { "background-position": "bottom" },
-    "bg-center": { "background-position": "center" },
-    "bg-left": { "background-position": "left" },
-    "bg-left-bottom": { "background-position": "left bottom" },
-    "bg-left-top": { "background-position": "left top" },
-    "bg-right": { "background-position": "right" },
-    "bg-right-bottom": { "background-position": "right bottom" },
-    "bg-right-top": { "background-position": "right top" },
-    "bg-top": { "background-position": "top" },
-    "bg-repeat": { "background-repeat": "repeat" },
-    "bg-no-repeat": { "background-repeat": "no-repeat" },
-    "bg-repeat-x": { "background-repeat": "repeat-x" },
-    "bg-repeat-y": { "background-repeat": "repeat-y" },
-    "bg-repeat-round": { "background-repeat": "round" },
-    "bg-repeat-space": { "background-repeat": "space" },
-    "bg-auto": { "background-size": "auto" },
-    "bg-cover": { "background-size": "cover" },
-    "bg-contain": { "background-size": "contain" },
-    "border-solid": { "border-style": "solid" },
-    "border-dashed": { "border-style": "dashed" },
-    "border-dotted": { "border-style": "dotted" },
-    "border-double": { "border-style": "double" },
-    "border-hidden": { "border-style": "hidden" },
-    "border-none": { "border-style": "none" },
-    "rounded-none": { "border-radius": "0px" },
-    "outline-none": { outline: "2px solid transparent", "outline-offset": "2px" },
-    "outline": { "outline-style": "solid" },
-    "outline-dashed": { "outline-style": "dashed" },
-    "outline-dotted": { "outline-style": "dotted" },
-    "outline-double": { "outline-style": "double" },
-    "outline-offset-0": { "outline-offset": "0px" },
-    "shadow-none": { "--jf-shadow": "0 0 #0000", "box-shadow": RING_BOX_SHADOW },
-    "opacity-0": { opacity: "0" },
-    "opacity-100": { opacity: "1" },
-    "filter": { filter: FILTER_VALUE },
-    "filter-none": { filter: "none" },
-    "backdrop-filter": { "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE },
-    "backdrop-filter-none": { "-webkit-backdrop-filter": "none", "backdrop-filter": "none" },
-    "grayscale": { "--jf-grayscale": "1", filter: FILTER_VALUE },
-    "grayscale-0": { "--jf-grayscale": "0", filter: FILTER_VALUE },
-    "invert": { "--jf-invert": "1", filter: FILTER_VALUE },
-    "invert-0": { "--jf-invert": "0", filter: FILTER_VALUE },
-    "sepia": { "--jf-sepia": "1", filter: FILTER_VALUE },
-    "sepia-0": { "--jf-sepia": "0", filter: FILTER_VALUE },
-    "backdrop-grayscale": { "--jf-backdrop-grayscale": "1", "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE },
-    "backdrop-grayscale-0": { "--jf-backdrop-grayscale": "0", "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE },
-    "backdrop-invert": { "--jf-backdrop-invert": "1", "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE },
-    "backdrop-invert-0": { "--jf-backdrop-invert": "0", "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE },
-    "backdrop-sepia": { "--jf-backdrop-sepia": "1", "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE },
-    "backdrop-sepia-0": { "--jf-backdrop-sepia": "0", "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE },
-    "aspect-auto": { "aspect-ratio": "auto" },
-    "aspect-square": { "aspect-ratio": "1 / 1" },
-    "aspect-video": { "aspect-ratio": "16 / 9" },
-    "ring-inset": { "--jf-ring-inset": "inset", "box-shadow": RING_BOX_SHADOW },
-    ring: ringWidthDeclaration("3px"),
-    "ring-0": ringWidthDeclaration("0px"),
-    "ring-1": ringWidthDeclaration("1px"),
-    "ring-2": ringWidthDeclaration("2px"),
-    "ring-4": ringWidthDeclaration("4px"),
-    "ring-8": ringWidthDeclaration("8px"),
-    "ring-offset-0": ringOffsetDeclaration("0px"),
-    "ring-offset-1": ringOffsetDeclaration("1px"),
-    "ring-offset-2": ringOffsetDeclaration("2px"),
-    "ring-offset-4": ringOffsetDeclaration("4px"),
-    "ring-offset-8": ringOffsetDeclaration("8px"),
-    "duration-75": { "transition-duration": "75ms" },
-    "duration-100": { "transition-duration": "100ms" },
-    "duration-150": { "transition-duration": "150ms" },
-    "duration-200": { "transition-duration": "200ms" },
-    "duration-300": { "transition-duration": "300ms" },
-    "duration-500": { "transition-duration": "500ms" },
-    "duration-700": { "transition-duration": "700ms" },
-    "duration-1000": { "transition-duration": "1000ms" },
-    "ease-linear": { "transition-timing-function": "linear" },
-    "ease-in": { "transition-timing-function": "cubic-bezier(0.4,0,1,1)" },
-    "ease-out": { "transition-timing-function": "cubic-bezier(0,0,0.2,1)" },
-    "ease-in-out": { "transition-timing-function": "cubic-bezier(0.4,0,0.2,1)" },
-    "transition-none": { "transition-property": "none" },
-    transition: {
-      "transition-property": "color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter",
-      "transition-timing-function": "cubic-bezier(0.4,0,0.2,1)",
-      "transition-duration": "150ms"
-    },
-    "transition-all": {
-      "transition-property": "all",
-      "transition-timing-function": "cubic-bezier(0.4,0,0.2,1)",
-      "transition-duration": "150ms"
-    },
-    "transition-colors": {
-      "transition-property": "color,background-color,border-color,text-decoration-color,fill,stroke",
-      "transition-timing-function": "cubic-bezier(0.4,0,0.2,1)",
-      "transition-duration": "150ms"
-    },
-    "transition-opacity": {
-      "transition-property": "opacity",
-      "transition-timing-function": "cubic-bezier(0.4,0,0.2,1)",
-      "transition-duration": "150ms"
-    },
-    "transition-shadow": {
-      "transition-property": "box-shadow",
-      "transition-timing-function": "cubic-bezier(0.4,0,0.2,1)",
-      "transition-duration": "150ms"
-    },
-    "transition-transform": {
-      "transition-property": "transform",
-      "transition-timing-function": "cubic-bezier(0.4,0,0.2,1)",
-      "transition-duration": "150ms"
-    },
-    transform: { transform: TRANSFORM_VALUE },
-    "transform-none": { transform: "none" },
-    "origin-center": { "transform-origin": "center" },
-    "origin-top": { "transform-origin": "top" },
-    "origin-top-right": { "transform-origin": "top right" },
-    "origin-right": { "transform-origin": "right" },
-    "origin-bottom-right": { "transform-origin": "bottom right" },
-    "origin-bottom": { "transform-origin": "bottom" },
-    "origin-bottom-left": { "transform-origin": "bottom left" },
-    "origin-left": { "transform-origin": "left" },
-    "origin-top-left": { "transform-origin": "top left" },
-    "scale-0": scaleDeclaration("0"),
-    "scale-50": scaleDeclaration(".5"),
-    "scale-75": scaleDeclaration(".75"),
-    "scale-90": scaleDeclaration(".9"),
-    "scale-95": scaleDeclaration(".95"),
-    "scale-100": scaleDeclaration("1"),
-    "scale-105": scaleDeclaration("1.05"),
-    "scale-110": scaleDeclaration("1.1"),
-    "scale-125": scaleDeclaration("1.25"),
-    "scale-150": scaleDeclaration("1.5"),
-    "rotate-0": rotateDeclaration("0deg"),
-    "rotate-1": rotateDeclaration("1deg"),
-    "rotate-2": rotateDeclaration("2deg"),
-    "rotate-3": rotateDeclaration("3deg"),
-    "rotate-6": rotateDeclaration("6deg"),
-    "rotate-12": rotateDeclaration("12deg"),
-    "rotate-45": rotateDeclaration("45deg"),
-    "rotate-90": rotateDeclaration("90deg"),
-    "rotate-180": rotateDeclaration("180deg"),
-    "animate-none": { animation: "none" },
-    "cursor-auto": { cursor: "auto" },
-    "cursor-default": { cursor: "default" },
-    "cursor-pointer": { cursor: "pointer" },
-    "cursor-wait": { cursor: "wait" },
-    "cursor-text": { cursor: "text" },
-    "cursor-move": { cursor: "move" },
-    "cursor-help": { cursor: "help" },
-    "cursor-not-allowed": { cursor: "not-allowed" },
-    "select-none": { "-webkit-user-select": "none", "user-select": "none" },
-    "select-text": { "-webkit-user-select": "text", "user-select": "text" },
-    "select-all": { "-webkit-user-select": "all", "user-select": "all" },
-    "select-auto": { "-webkit-user-select": "auto", "user-select": "auto" },
-    "pointer-events-none": { "pointer-events": "none" },
-    "pointer-events-auto": { "pointer-events": "auto" },
-    resize: { resize: "both" },
-    "resize-none": { resize: "none" },
-    "resize-x": { resize: "horizontal" },
-    "resize-y": { resize: "vertical" },
-    "list-none": { "list-style-type": "none" },
-    "list-disc": { "list-style-type": "disc" },
-    "list-decimal": { "list-style-type": "decimal" },
-    "appearance-none": { appearance: "none" },
-    "appearance-auto": { appearance: "auto" }
-  };
+  function _ringW(v) {
+    return { "--jf-ring-shadow":"var(--jf-ring-inset,) 0 0 0 calc("+v+" + var(--jf-ring-offset-width,0px)) var(--jf-ring-color,rgb(59 130 246/0.5))","box-shadow":RING };
+  }
+  function _ringOff(v) {
+    return { "--jf-ring-offset-width":v,"--jf-ring-offset-shadow":"var(--jf-ring-inset,) 0 0 0 var(--jf-ring-offset-width,0px) var(--jf-ring-offset-color,#fff)","box-shadow":RING };
+  }
+  function _scale(v) { return {"--jf-sx":v,"--jf-sy":v,"transform":TRANSFORM}; }
+  function _rot(v)   { return {"--jf-rotate":v,"transform":TRANSFORM}; }
 
-  var pseudoModifiers = {
-    hover: ":hover",
-    focus: ":focus",
-    active: ":active",
-    visited: ":visited",
-    disabled: ":disabled",
-    enabled: ":enabled",
-    checked: ":checked",
-    invalid: ":invalid",
-    valid: ":valid",
-    required: ":required",
-    optional: ":optional",
-    "focus-within": ":focus-within",
-    "focus-visible": ":focus-visible",
-    first: ":first-child",
-    last: ":last-child",
-    only: ":only-child",
-    odd: ":nth-child(odd)",
-    even: ":nth-child(even)",
-    empty: ":empty",
-    target: ":target",
-    open: "[open]"
-  };
+  // ─── UTILITY FUNCTIONS (JIT-style resolvers) ───────────────────────────────
+  // Each function: (value, negative, theme) → declarations object | null
 
-  var initialConfig = importedConfig || global.jetflowConfig || {};
-  var config = createConfig({});
-  var tokenCache = new Map();
-  var ruleCache = tokenCache;
-  var utilityCache = new Map();
-  var semanticPresetCss = "";
-  var semanticPresetDirty = true;
-  var styleApplyCss = "";
-  var styleApplyDirty = true;
-  var tokenRegistry = new Map();
-  var nodeTokenRegistry = typeof WeakMap !== "undefined" ? new WeakMap() : null;
-  var tokenSequence = 0;
-  var fullScanRequired = true;
-  var invalidTokenWarnings = new Set();
-  var configRevision = 0;
-  var compositionCache = null;
-  var compositionCacheRevision = -1;
-  var observer = null;
-  var scheduled = false;
-  var started = false;
-  var styleElement = null;
+  function utilBg(value, _neg, theme) {
+    var col = resolveColor(value, theme);
+    if (col) return {"background-color":col};
+    return null;
+  }
 
-  var JetFlow = {
-    version: VERSION,
-    config: config,
-    init: init,
-    start: start,
-    stop: stop,
-    refresh: refresh,
-    configure: configure,
-    modules: {
-      parser: {
-        tokenize: splitClassValue,
-        parseClassValue: parseClassValue,
-        parseToken: parseToken,
-        classifyToken: classifyToken,
-        expandGroupToken: function expandPublicGroupToken(token) {
-          return expandGroupToken(token, []);
-        }
-      },
-      sanitizer: {
-        sanitizeValue: sanitizeValue
-      },
-      resolver: {
-        resolveUtility: resolveUtility,
-        resolveColorValue: resolveColorValue
-      },
-      engine: {
-        compileToken: compileToken,
-        refresh: refresh,
-        tokenCache: tokenCache
-      },
-      observer: {
-        start: start,
-        stop: stop,
-        scanDocument: scanDocument
-      }
-    },
-    scan: function scan() {
-      scanDocument();
-      refresh();
-      return JetFlow;
-    },
-    compileClass: function compileClass(token) {
-      return compileToken(token, null, false);
-    },
-    clearCache: function clearCache() {
-      tokenCache.clear();
-      utilityCache.clear();
-      semanticPresetDirty = true;
-      styleApplyDirty = true;
+  function utilP(value, neg, theme) {
+    var v = resolveSpacing(value, theme);
+    if (v === undefined) return null;
+    if (neg && v !== "0px") v = "-" + v;
+    return {padding: v};
+  }
+
+  function utilText(value, _neg, theme) {
+    var fs = theme.fontSize && theme.fontSize[value];
+    if (fs) {
+      if (Array.isArray(fs)) return {"font-size":fs[0],"line-height":fs[1]};
+      return {"font-size":fs};
     }
-  };
+    // Arbitrary size via text-[22px]
+    var col = resolveColor(value, theme);
+    if (col) return {color: col};
+    return null;
+  }
 
-  global.JetFlow = JetFlow;
-  JetFlow.init(initialConfig);
+  function utilFlex(_v, _n, _t) { return {display:"flex"}; }
+  function utilGrid(_v, _n, _t) { return {display:"grid"}; }
 
-  ready(function boot() {
-    if (config.autoStart !== false) start();
-  });
+  // ─── DYNAMIC UTILITY RESOLVER ─────────────────────────────────────────────
+  var SPACING_PREFIXES = [
+    ["px",     ["padding-left","padding-right"]],
+    ["py",     ["padding-top","padding-bottom"]],
+    ["pt",     ["padding-top"]],    ["pr",     ["padding-right"]],
+    ["pb",     ["padding-bottom"]], ["pl",     ["padding-left"]],
+    ["p",      ["padding"]],
+    ["mx",     ["margin-left","margin-right"]],
+    ["my",     ["margin-top","margin-bottom"]],
+    ["mt",     ["margin-top"]],     ["mr",     ["margin-right"]],
+    ["mb",     ["margin-bottom"]],  ["ml",     ["margin-left"]],
+    ["m",      ["margin"]],
+    ["gap-x",  ["column-gap"]], ["gap-y",  ["row-gap"]], ["gap", ["gap"]],
+    ["inset-x",["left","right"]], ["inset-y",["top","bottom"]],
+    ["inset",  ["top","right","bottom","left"]],
+    ["top",    ["top"]], ["right",["right"]], ["bottom",["bottom"]], ["left",["left"]]
+  ];
+
+  var SIZE_PREFIXES = [
+    ["min-w",  ["min-width"]], ["max-w",  ["max-width"]], ["w", ["width"]],
+    ["min-h",  ["min-height"]], ["max-h", ["max-height"]], ["h", ["height"]],
+    ["basis",  ["flex-basis"]]
+  ];
+
+  function resolveDynamic(base, neg, theme) {
+    var key, val, color;
+
+    // ── spacing ──
+    for (var si = 0; si < SPACING_PREFIXES.length; si++) {
+      var sp = SPACING_PREFIXES[si][0], props = SPACING_PREFIXES[si][1];
+      if (base === sp + "-auto") return makeDecls(props, "auto");
+      if (startsWith(base, sp + "-")) {
+        key = base.slice(sp.length + 1);
+        // Arbitrary: p-[13px]
+        if (startsWith(key, "[") && endsWith(key, "]")) {
+          val = validateArbitrary(key.slice(1, -1));
+          if (!val) return null;
+          if (neg && val !== "0px") val = "-" + val;
+          return makeDecls(props, val);
+        }
+        val = resolveSpacing(key, theme);
+        if (val !== undefined) {
+          if (neg && val !== "0px") val = "-" + val;
+          return makeDecls(props, val);
+        }
+      }
+    }
+
+    // ── space-x / space-y ──
+    if (startsWith(base, "space-x-")) {
+      val = resolveSpacingOrArbitrary(base.slice(8), neg, theme);
+      if (val) return {rules:[{selector:"& > :not([hidden]) ~ :not([hidden])",declarations:{"margin-left":val}}]};
+    }
+    if (startsWith(base, "space-y-")) {
+      val = resolveSpacingOrArbitrary(base.slice(8), neg, theme);
+      if (val) return {rules:[{selector:"& > :not([hidden]) ~ :not([hidden])",declarations:{"margin-top":val}}]};
+    }
+
+    // ── sizing ──
+    for (var zi = 0; zi < SIZE_PREFIXES.length; zi++) {
+      var zp = SIZE_PREFIXES[zi][0], zprops = SIZE_PREFIXES[zi][1];
+      if (startsWith(base, zp + "-")) {
+        key = base.slice(zp.length + 1);
+        if (startsWith(key, "[") && endsWith(key, "]")) {
+          val = validateArbitrary(key.slice(1, -1));
+          if (!val) return null;
+          return makeDecls(zprops, val);
+        }
+        val = resolveSize(key, zp, theme);
+        if (val !== undefined) return makeDecls(zprops, val);
+      }
+    }
+
+    // ── text color / size ──
+    if (startsWith(base, "text-")) {
+      key = base.slice(5);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return looksLikeLength(val) ? {"declarations":{"font-size":val}} : {"declarations":{"color":val}};
+      }
+      var fs = theme.fontSize && theme.fontSize[key];
+      if (fs) {
+        if (Array.isArray(fs)) return {declarations:{"font-size":fs[0],"line-height":fs[1]}};
+        return {declarations:{"font-size":fs}};
+      }
+      color = resolveColor(key, theme);
+      if (color) return {declarations:{color:color}};
+    }
+
+    // ── bg color / arbitrary ──
+    if (startsWith(base, "bg-")) {
+      key = base.slice(3);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"background-color":val}};
+      }
+      color = resolveColor(key, theme);
+      if (color) return {declarations:{"background-color":color}};
+    }
+
+    // ── font ──
+    if (startsWith(base, "font-")) {
+      key = base.slice(5);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"font-weight":val}};
+      }
+      val = theme.fontWeight && theme.fontWeight[key];
+      if (val) return {declarations:{"font-weight":val}};
+      if (key === "sans") return {declarations:{"font-family":"system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif"}};
+      if (key === "serif") return {declarations:{"font-family":"ui-serif,Georgia,Cambria,\"Times New Roman\",Times,serif"}};
+      if (key === "mono") return {declarations:{"font-family":"ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace"}};
+    }
+
+    // ── leading ──
+    if (startsWith(base, "leading-")) {
+      key = base.slice(8);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"line-height":val}};
+      }
+      val = theme.lineHeight && theme.lineHeight[key];
+      if (val) return {declarations:{"line-height":val}};
+    }
+
+    // ── tracking ──
+    if (startsWith(base, "tracking-")) {
+      key = base.slice(9);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"letter-spacing":val}};
+      }
+      val = theme.letterSpacing && theme.letterSpacing[key];
+      if (val !== undefined) return {declarations:{"letter-spacing":val}};
+    }
+
+    // ── border ──
+    if (base === "border") return {declarations:{"border-width":theme.borderWidth && theme.borderWidth.DEFAULT || "1px"}};
+    if (startsWith(base, "border-")) {
+      key = base.slice(7);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return looksLikeLength(val) ? {declarations:{"border-width":val}} : {declarations:{"border-color":val}};
+      }
+      val = theme.borderWidth && theme.borderWidth[key];
+      if (val !== undefined) return {declarations:{"border-width":val}};
+      color = resolveColor(key, theme);
+      if (color) return {declarations:{"border-color":color}};
+      var bSideR = resolveBorderSide(base, theme);
+      if (bSideR) return bSideR;
+    }
+
+    // ── rounded ──
+    if (base === "rounded") return {declarations:{"border-radius": theme.borderRadius && theme.borderRadius.DEFAULT || "0.25rem"}};
+    if (startsWith(base, "rounded-")) {
+      key = base.slice(8);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"border-radius":val}};
+      }
+      val = theme.borderRadius && theme.borderRadius[key];
+      if (val !== undefined) return {declarations:{"border-radius":val}};
+      var rrSide = resolveRoundedSide(base, theme);
+      if (rrSide) return rrSide;
+    }
+
+    // ── shadow ──
+    if (base === "shadow") return {declarations:{"--jf-shadow":(theme.boxShadow && theme.boxShadow.DEFAULT) || "0 1px 3px 0 rgb(0 0 0/0.1)","box-shadow":RING}};
+    if (startsWith(base, "shadow-")) {
+      key = base.slice(7);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"--jf-shadow":val,"box-shadow":RING}};
+      }
+      val = theme.boxShadow && theme.boxShadow[key];
+      if (val) return {declarations:{"--jf-shadow":val,"box-shadow":RING}};
+    }
+
+    // ── opacity ──
+    if (startsWith(base, "opacity-")) {
+      key = base.slice(8);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{opacity:val}};
+      }
+      val = theme.opacity && theme.opacity[key];
+      if (val !== undefined) return {declarations:{opacity:val}};
+    }
+
+    // ── z-index ──
+    if (startsWith(base, "z-")) {
+      key = base.slice(2);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"z-index":neg ? "-"+val : val}};
+      }
+      val = theme.zIndex && theme.zIndex[key];
+      if (val !== undefined) return {declarations:{"z-index":neg ? "-"+val : val}};
+      if (/^\d+$/.test(key)) return {declarations:{"z-index":neg ? "-"+key : key}};
+    }
+
+    // ── blur ──
+    if (base === "blur") return {declarations:{"--jf-blur":(theme.blur&&theme.blur.DEFAULT)||"8px","filter":FILTER}};
+    if (startsWith(base, "blur-")) {
+      key = base.slice(5);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"--jf-blur":val,"filter":FILTER}};
+      }
+      val = theme.blur && theme.blur[key];
+      if (val !== undefined) return {declarations:{"--jf-blur":val,"filter":FILTER}};
+    }
+
+    // ── brightness / contrast / saturate / hue-rotate ──
+    var filterMap = [
+      ["brightness-","--jf-brightness",null],
+      ["contrast-","--jf-contrast",null],
+      ["saturate-","--jf-saturate",null],
+      ["hue-rotate-","--jf-hue-rotate",null]
+    ];
+    for (var fi = 0; fi < filterMap.length; fi++) {
+      var fpx = filterMap[fi][0], fprop = filterMap[fi][1];
+      if (startsWith(base, fpx)) {
+        key = base.slice(fpx.length);
+        if (startsWith(key, "[") && endsWith(key, "]")) {
+          val = validateArbitrary(key.slice(1, -1));
+          if (!val) return null;
+          if (neg) val = "-" + val;
+          return {declarations:{[fprop]:val,"filter":FILTER}};
+        }
+        var fscale = fpx === "brightness-" ? theme.brightness :
+                     fpx === "contrast-"   ? theme.contrast   :
+                     fpx === "saturate-"   ? theme.saturate   : theme.hueRotate;
+        val = fscale && fscale[key];
+        if (val !== undefined) {
+          if (neg) val = "-" + val;
+          return {declarations:{[fprop]:val,"filter":FILTER}};
+        }
+      }
+    }
+
+    // ── ring / ring-color ──
+    if (startsWith(base, "ring-offset-")) {
+      key = base.slice(12);
+      color = resolveColor(key, theme);
+      if (color) return {declarations:{"--jf-ring-offset-color":color,"--jf-ring-offset-shadow":"var(--jf-ring-inset,) 0 0 0 var(--jf-ring-offset-width,0px) "+color,"box-shadow":RING}};
+    }
+    if (startsWith(base, "ring-")) {
+      key = base.slice(5);
+      color = resolveColor(key, theme);
+      if (color) return {declarations:{"--jf-ring-color":color,"box-shadow":RING}};
+    }
+
+    // ── transition duration / timing ──
+    if (startsWith(base, "duration-")) {
+      key = base.slice(9);
+      val = theme.transitionDuration && theme.transitionDuration[key];
+      if (!val && /^\d+$/.test(key)) val = key + "ms";
+      if (val) return {declarations:{"transition-duration":val}};
+    }
+    if (startsWith(base, "ease-")) {
+      key = base.slice(5);
+      var easeMap = {linear:"linear","in":"cubic-bezier(0.4,0,1,1)","out":"cubic-bezier(0,0,0.2,1)","in-out":"cubic-bezier(0.4,0,0.2,1)"};
+      val = easeMap[key];
+      if (val) return {declarations:{"transition-timing-function":val}};
+    }
+
+    // ── delay ──
+    if (startsWith(base, "delay-")) {
+      key = base.slice(6);
+      if (/^\d+$/.test(key)) return {declarations:{"transition-delay":key+"ms"}};
+    }
+
+    // ── scale / rotate / translate / skew (with arbitrary) ──
+    if (startsWith(base, "scale-")) {
+      key = base.slice(6);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"--jf-sx":val,"--jf-sy":val,"transform":TRANSFORM}};
+      }
+      if (/^\d+$/.test(key)) { val = String(parseInt(key,10)/100); return {declarations:{"--jf-sx":val,"--jf-sy":val,"transform":TRANSFORM}}; }
+    }
+    if (startsWith(base, "rotate-")) {
+      key = base.slice(7);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        if (neg) val = "-" + val;
+        return {declarations:{"--jf-rotate":val,"transform":TRANSFORM}};
+      }
+      if (/^\d+$/.test(key)) { val = (neg?"-":"")+key+"deg"; return {declarations:{"--jf-rotate":val,"transform":TRANSFORM}}; }
+    }
+    if (startsWith(base, "translate-x-")) {
+      key = base.slice(12);
+      val = resolveSpacingOrArbitrary(key, neg, theme);
+      if (val) return {declarations:{"--jf-tx":val,"transform":TRANSFORM}};
+    }
+    if (startsWith(base, "translate-y-")) {
+      key = base.slice(12);
+      val = resolveSpacingOrArbitrary(key, neg, theme);
+      if (val) return {declarations:{"--jf-ty":val,"transform":TRANSFORM}};
+    }
+    if (startsWith(base, "skew-x-")) {
+      key = base.slice(7);
+      val = resolveSpacingOrArbitrary(key, neg, theme);
+      if (val) return {declarations:{"--jf-skew-x":val,"transform":TRANSFORM}};
+    }
+    if (startsWith(base, "skew-y-")) {
+      key = base.slice(7);
+      val = resolveSpacingOrArbitrary(key, neg, theme);
+      if (val) return {declarations:{"--jf-skew-y":val,"transform":TRANSFORM}};
+    }
+
+    // ── grid ──
+    if (/^grid-cols-(\d+)$/.test(base)) {
+      val = base.match(/^grid-cols-(\d+)$/)[1];
+      return {declarations:{"grid-template-columns":"repeat("+val+",minmax(0,1fr))"}};
+    }
+    if (/^grid-rows-(\d+)$/.test(base)) {
+      val = base.match(/^grid-rows-(\d+)$/)[1];
+      return {declarations:{"grid-template-rows":"repeat("+val+",minmax(0,1fr))"}};
+    }
+    if (/^col-span-(\d+)$/.test(base)) {
+      val = base.match(/^col-span-(\d+)$/)[1];
+      return {declarations:{"grid-column":"span "+val+" / span "+val}};
+    }
+    if (/^row-span-(\d+)$/.test(base)) {
+      val = base.match(/^row-span-(\d+)$/)[1];
+      return {declarations:{"grid-row":"span "+val+" / span "+val}};
+    }
+    if (/^col-start-(\d+)$/.test(base)) return {declarations:{"grid-column-start":base.slice(10)}};
+    if (/^col-end-(\d+)$/.test(base))   return {declarations:{"grid-column-end":base.slice(8)}};
+    if (/^row-start-(\d+)$/.test(base)) return {declarations:{"grid-row-start":base.slice(10)}};
+    if (/^row-end-(\d+)$/.test(base))   return {declarations:{"grid-row-end":base.slice(8)}};
+    if (/^grid-cols-\[.+\]$/.test(base)) {
+      val = validateArbitrary(base.slice(12, -1));
+      if (val) return {declarations:{"grid-template-columns":val}};
+    }
+    if (/^grid-rows-\[.+\]$/.test(base)) {
+      val = validateArbitrary(base.slice(12, -1));
+      if (val) return {declarations:{"grid-template-rows":val}};
+    }
+
+    // ── order ──
+    if (startsWith(base, "order-")) {
+      key = base.slice(6);
+      var orderFixed = {first:"-9999", last:"9999", none:"0"};
+      val = orderFixed[key] || (/^\d+$/.test(key) ? key : undefined);
+      if (val !== undefined) return {declarations:{order:neg?"-"+val:val}};
+    }
+
+    // ── outline ──
+    if (startsWith(base, "outline-")) {
+      key = base.slice(8);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return looksLikeLength(val) ? {declarations:{"outline-width":val}} : {declarations:{"outline-color":val}};
+      }
+      color = resolveColor(key, theme);
+      if (color) return {declarations:{"outline-color":color}};
+      if (/^\d+$/.test(key)) return {declarations:{"outline-width":key+"px"}};
+    }
+
+    // ── fill / stroke ──
+    if (startsWith(base, "fill-")) {
+      color = resolveColor(base.slice(5), theme);
+      if (color) return {declarations:{fill:color}};
+    }
+    if (startsWith(base, "stroke-")) {
+      key = base.slice(7);
+      color = resolveColor(key, theme);
+      if (color) return {declarations:{stroke:color}};
+      if (/^\d+$/.test(key)) return {declarations:{"stroke-width":key+"px"}};
+    }
+
+    // ── caret / accent ──
+    if (startsWith(base, "caret-")) { color = resolveColor(base.slice(6), theme); if (color) return {declarations:{"caret-color":color}}; }
+    if (startsWith(base, "accent-")) { color = resolveColor(base.slice(7), theme); if (color) return {declarations:{"accent-color":color}}; }
+
+    // ── decoration (text-decoration-color / thickness) ──
+    if (startsWith(base, "decoration-")) {
+      key = base.slice(11);
+      color = resolveColor(key, theme);
+      if (color) return {declarations:{"text-decoration-color":color}};
+      if (looksLikeLength(key)) return {declarations:{"text-decoration-thickness":key}};
+    }
+
+    // ── animate ──
+    if (startsWith(base, "animate-")) {
+      key = base.slice(8);
+      val = theme.animation && theme.animation[key];
+      if (val) return {declarations:{animation:val}};
+    }
+
+    // ── columns ──
+    if (startsWith(base, "columns-")) {
+      key = base.slice(8);
+      if (/^\d+$/.test(key)) return {declarations:{columns:key}};
+      val = resolveSize(key, "w", theme);
+      if (val) return {declarations:{columns:val}};
+    }
+
+    // ── aspect ──
+    if (startsWith(base, "aspect-")) {
+      key = base.slice(7);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"aspect-ratio":val}};
+      }
+    }
+
+    // ── indent ──
+    if (startsWith(base, "indent-")) {
+      key = base.slice(7);
+      val = resolveSpacingOrArbitrary(key, neg, theme);
+      if (val) return {declarations:{"text-indent":val}};
+    }
+
+    // ── object-position ──
+    if (startsWith(base, "object-")) {
+      key = base.slice(7);
+      if (startsWith(key, "[") && endsWith(key, "]")) {
+        val = validateArbitrary(key.slice(1, -1));
+        if (!val) return null;
+        return {declarations:{"object-position":val}};
+      }
+    }
+
+    // ── fully arbitrary property: [property:value] ──
+    if (startsWith(base, "[") && endsWith(base, "]")) {
+      return resolveArbitraryProperty(base.slice(1, -1));
+    }
+
+    // ── scoped: jf-scope-[name] ──
+    if (/^jf-scope-\[/.test(base)) return null; // handled at selector level
+
+    return null;
+  }
+
+  function resolveBorderSide(base, theme) {
+    var sides = {
+      "border-x": ["border-left-width","border-right-width"],
+      "border-y": ["border-top-width","border-bottom-width"],
+      "border-t": ["border-top-width"], "border-r": ["border-right-width"],
+      "border-b": ["border-bottom-width"], "border-l": ["border-left-width"]
+    };
+    for (var s in sides) {
+      if (!Object.prototype.hasOwnProperty.call(sides, s)) continue;
+      if (base === s) return {declarations: makeDecls(sides[s], (theme.borderWidth && theme.borderWidth.DEFAULT) || "1px")};
+      if (startsWith(base, s + "-")) {
+        var key = base.slice(s.length + 1);
+        var val = theme.borderWidth && theme.borderWidth[key];
+        if (val !== undefined) return {declarations: makeDecls(sides[s], val)};
+      }
+    }
+    return null;
+  }
+
+  function resolveRoundedSide(base, theme) {
+    var corners = {
+      "rounded-t":  ["border-top-left-radius","border-top-right-radius"],
+      "rounded-r":  ["border-top-right-radius","border-bottom-right-radius"],
+      "rounded-b":  ["border-bottom-right-radius","border-bottom-left-radius"],
+      "rounded-l":  ["border-top-left-radius","border-bottom-left-radius"],
+      "rounded-tl": ["border-top-left-radius"],    "rounded-tr": ["border-top-right-radius"],
+      "rounded-br": ["border-bottom-right-radius"], "rounded-bl": ["border-bottom-left-radius"]
+    };
+    for (var c in corners) {
+      if (!Object.prototype.hasOwnProperty.call(corners, c)) continue;
+      if (base === c) return {declarations: makeDecls(corners[c], (theme.borderRadius && theme.borderRadius.DEFAULT) || "0.25rem")};
+      if (startsWith(base, c + "-")) {
+        var key = base.slice(c.length + 1);
+        var val = theme.borderRadius && theme.borderRadius[key];
+        if (val !== undefined) return {declarations: makeDecls(corners[c], val)};
+      }
+    }
+    return null;
+  }
+
+  function resolveArbitraryProperty(inner) {
+    var colon = inner.indexOf(":");
+    if (colon <= 0) return null;
+    var prop = inner.slice(0, colon).trim();
+    var rawVal = inner.slice(colon + 1).trim().replace(/_/g, " ");
+    if (!isSafeProp(prop)) return null;
+    var val = sanitizeValue(rawVal);
+    if (!val) return null;
+    var d = {};
+    d[prop] = val;
+    return {declarations: d};
+  }
+
+  // ─── VALUE HELPERS ─────────────────────────────────────────────────────────
+
+  function resolveSpacing(key, theme) {
+    if (key === "auto") return "auto";
+    if (key === "px")   return "1px";
+    if (key === "0")    return "0px";
+    var sc = theme.spacing;
+    if (sc && Object.prototype.hasOwnProperty.call(sc, key)) return sc[key];
+    if (/^\d+(\.\d+)?(px|rem|em|%|vh|vw)$/.test(key)) return key;
+    return undefined;
+  }
+
+  function resolveSpacingOrArbitrary(key, neg, theme) {
+    if (startsWith(key, "[") && endsWith(key, "]")) {
+      var v = validateArbitrary(key.slice(1, -1));
+      if (!v) return null;
+      if (neg && v !== "0px") v = "-" + v;
+      return v;
+    }
+    var sp = resolveSpacing(key, theme);
+    if (sp !== undefined) {
+      if (neg && sp !== "0px") sp = "-" + sp;
+      return sp;
+    }
+    var frac = fractionToPercent(key);
+    if (frac) return neg ? "-" + frac : frac;
+    return null;
+  }
+
+  function resolveSize(key, prefix, theme) {
+    var fixed = {auto:"auto",full:"100%",screen:(prefix&&prefix.indexOf("h")!==-1)?"100vh":"100vw",
+      svw:"100svw",lvw:"100lvw",dvw:"100dvw",svh:"100svh",lvh:"100lvh",dvh:"100dvh",
+      min:"min-content",max:"max-content",fit:"fit-content"};
+    if (fixed[key]) return fixed[key];
+    if (key === "none" && prefix && startsWith(prefix,"max")) return "none";
+    var sp = resolveSpacing(key, theme);
+    if (sp !== undefined) return sp;
+    var frac = fractionToPercent(key);
+    if (frac) return frac;
+    return undefined;
+  }
+
+  function resolveColor(key, theme) {
+    if (!key) return null;
+    var parts = splitOutside(key, "/");
+    var colorKey = parts[0];
+    var alpha = parts.length > 1 ? parts.slice(1).join("/") : null;
+    var col = findColor(colorKey, theme);
+    if (!col && looksLikeRawColor(colorKey)) col = colorKey;
+    if (!col) return null;
+    if (alpha !== null) {
+      var av = startsWith(alpha,"[") && endsWith(alpha,"]") ? alpha.slice(1,-1) : alpha;
+      col = applyAlpha(col, av);
+    }
+    return col;
+  }
+
+  function findColor(key, theme) {
+    var colors = (theme && theme.colors) || {};
+    if (Object.prototype.hasOwnProperty.call(colors, key) && typeof colors[key] === "string") return colors[key];
+    var parts = key.split("-");
+    var cur = colors;
+    for (var i = 0; i < parts.length; i++) {
+      if (cur && Object.prototype.hasOwnProperty.call(cur, parts[i])) { cur = cur[parts[i]]; }
+      else return null;
+    }
+    if (typeof cur === "string") return cur;
+    if (cur && typeof cur.DEFAULT === "string") return cur.DEFAULT;
+    return null;
+  }
+
+  function applyAlpha(col, alpha) {
+    var n = parseFloat(alpha);
+    if (!isNaN(n) && n > 1) n = n / 100;
+    var rgb = hexToRgb(col);
+    if (rgb) return "rgba("+rgb.r+","+rgb.g+","+rgb.b+","+(isNaN(n)?alpha:n)+")";
+    return "color-mix(in srgb,"+col+" "+(isNaN(n)?alpha:n*100)+"%, transparent)";
+  }
+
+  function hexToRgb(col) {
+    var s3 = /^#([0-9a-f]{3})$/i.exec(col);
+    if (s3) { var x=s3[1]; return {r:parseInt(x[0]+x[0],16),g:parseInt(x[1]+x[1],16),b:parseInt(x[2]+x[2],16)}; }
+    var s6 = /^#([0-9a-f]{6})$/i.exec(col);
+    if (s6) { var h=s6[1]; return {r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)}; }
+    return null;
+  }
+
+  function looksLikeRawColor(v) {
+    return /^(#|rgb\(|rgba\(|hsl\(|hsla\()/i.test(v) ||
+      /^(transparent|currentColor|inherit|black|white)$/.test(v);
+  }
+
+  function looksLikeLength(v) {
+    return /^-?\d+(\.\d+)?(px|rem|em|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|fr|deg|rad|turn|s|ms)$/i.test(v) ||
+      /^(calc|clamp|min|max|var)\(/.test(v);
+  }
+
+  function fractionToPercent(key) {
+    var m = /^(\d+)\/(\d+)$/.exec(key);
+    if (!m) return null;
+    var d = parseFloat(m[2]);
+    if (!d) return null;
+    return (parseFloat(m[1]) / d * 100) + "%";
+  }
+
+  function makeDecls(props, val) {
+    var d = {};
+    for (var i = 0; i < props.length; i++) d[props[i]] = val;
+    return {declarations: d};
+  }
+
+  // ─── CLASS PARSER ──────────────────────────────────────────────────────────
+  // Returns { variants: string[], utility: string, value: string, important: bool, raw: string }
+
+  function parseToken(raw) {
+    var parts = splitOutside(raw, ":");
+    var base  = parts.pop() || "";
+    var important = false;
+    if (base.charAt(0) === "!") { important = true; base = base.slice(1); }
+    if (base.charAt(base.length - 1) === "!") { important = true; base = base.slice(0, -1); }
+
+    var uv = splitUtilityValue(base);
+    return {
+      variants:  parts,          // ["md","hover","focus"] — media first, pseudo last
+      utility:   uv.utility,     // "bg", "p", "text", etc.
+      value:     uv.value,       // "blue-500", "4", "xl", etc.
+      base:      base,           // original base string (for resolver)
+      important: important,
+      raw:       raw
+    };
+  }
+
+  // Known utility prefixes, longest first to avoid partial matches
+  var UTILITY_PREFIXES = [
+    "backdrop-filter","backdrop-grayscale","backdrop-invert","backdrop-sepia",
+    "translate-x","translate-y","underline-offset","skew-x","skew-y",
+    "object-position","bg-clip","bg-origin","bg-position","bg-size",
+    "border-spacing","grid-cols","grid-rows","col-span","col-start","col-end",
+    "row-span","row-start","row-end","ring-offset","decoration",
+    "stroke-width","outline-offset","rounded-tl","rounded-tr","rounded-bl","rounded-br",
+    "rounded-t","rounded-r","rounded-b","rounded-l","rounded",
+    "border-x","border-y","border-t","border-r","border-b","border-l","border",
+    "inset-x","inset-y","inset","min-w","max-w","min-h","max-h",
+    "gap-x","gap-y","gap","space-x","space-y","hue-rotate",
+    "brightness","contrast","saturate","font-size",
+    "animate","aspect","accent","basis","blur","caret","columns","content",
+    "cursor","delay","duration","ease","fill","font","grid","indent",
+    "leading","list","object","opacity","order","origin","outline",
+    "overflow","overscroll","ring","rotate","scale","sepia","shadow",
+    "stroke","text","tracking","transition","z",
+    "flex","bg","m","p","h","w"
+  ];
+
+  function splitUtilityValue(base) {
+    for (var i = 0; i < UTILITY_PREFIXES.length; i++) {
+      var pfx = UTILITY_PREFIXES[i];
+      if (base === pfx) return {utility: pfx, value: ""};
+      if (startsWith(base, pfx + "-")) return {utility: pfx, value: base.slice(pfx.length + 1)};
+    }
+    return {utility: base, value: ""};
+  }
+
+  function splitOutside(str, sep) {
+    var parts = [], cur = "", depth = 0, esc = false;
+    for (var i = 0; i < str.length; i++) {
+      var c = str.charAt(i);
+      if (esc) { cur += c; esc = false; continue; }
+      if (c === "\\") { cur += c; esc = true; continue; }
+      if (c === "[") depth++;
+      if (c === "]") depth = Math.max(0, depth - 1);
+      if (c === sep && depth === 0) { parts.push(cur); cur = ""; }
+      else cur += c;
+    }
+    parts.push(cur);
+    return parts;
+  }
+
+  function splitClasses(val) {
+    var chunks = [], cur = "", bd = 0, pd = 0, esc = false;
+    for (var i = 0; i < val.length; i++) {
+      var c = val.charAt(i);
+      if (esc) { cur += c; esc = false; continue; }
+      if (c === "\\") { cur += c; esc = true; continue; }
+      if (c === "[") bd++;
+      if (c === "]") bd = Math.max(0, bd - 1);
+      if (c === "(" && bd === 0) pd++;
+      if (c === ")" && bd === 0) pd = Math.max(0, pd - 1);
+      if (/\s/.test(c) && bd === 0 && pd === 0) { if (cur) { chunks.push(cur); cur = ""; } }
+      else cur += c;
+    }
+    if (cur) chunks.push(cur);
+    return chunks;
+  }
+
+  function startsWith(str, prefix) { return String(str).indexOf(prefix) === 0; }
+  function endsWith(str, suffix)   { return String(str).slice(-suffix.length) === suffix; }
+
+  // ─── SELECTOR CONTEXT BUILDER ──────────────────────────────────────────────
+  // Correct order: media queries → container → dark → selector pseudo
+
+  function buildContext(token, parsed, scopePrefix) {
+    var sel = "." + cssEscape(token);
+    if (scopePrefix) sel = scopePrefix + " " + sel;
+    var media = [], dark = false;
+
+    // Sort variants: media first, then dark, then pseudo
+    var variants = parsed.variants || [];
+    for (var i = 0; i < variants.length; i++) {
+      var v = variants[i];
+      if (!v) continue;
+
+      // Responsive (media)
+      if (config.screens[v]) { media.push("(min-width:" + config.screens[v] + ")"); continue; }
+
+      // Dark mode
+      if (v === "dark") { dark = true; continue; }
+
+      // Motion / print / orientation
+      if (v === "motion-safe")   { media.push("(prefers-reduced-motion:no-preference)"); continue; }
+      if (v === "motion-reduce") { media.push("(prefers-reduced-motion:reduce)"); continue; }
+      if (v === "portrait")      { media.push("(orientation:portrait)"); continue; }
+      if (v === "landscape")     { media.push("(orientation:landscape)"); continue; }
+      if (v === "print")         { media.push("print"); continue; }
+
+      // Pseudo
+      if (PSEUDO[v]) { sel += PSEUDO[v]; continue; }
+
+      // group-hover, peer-focus, etc.
+      if (startsWith(v, "group-")) {
+        var gs = v.slice(6);
+        sel = ".group" + (PSEUDO[gs] || ":" + gs) + " " + sel;
+        continue;
+      }
+      if (startsWith(v, "peer-")) {
+        var ps = v.slice(5);
+        sel = ".peer" + (PSEUDO[ps] || ":" + ps) + " ~ " + sel;
+        continue;
+      }
+
+      // aria-* / data-*
+      if (startsWith(v, "aria-")) { sel += "[aria-" + v.slice(5) + "=\"true\"]"; continue; }
+      if (startsWith(v, "data-")) { sel += "[data-" + v.slice(5) + "]"; continue; }
+    }
+
+    return {selector: sel, media: media, dark: dark};
+  }
+
+  function cssEscape(val) {
+    if (global.CSS && typeof global.CSS.escape === "function") return global.CSS.escape(val);
+    return String(val).replace(/([^a-zA-Z0-9_-])/g, "\\$1");
+  }
+
+  // ─── CSS GENERATION ────────────────────────────────────────────────────────
+
+  function buildCSS(token, parsed, utility, scopePrefix) {
+    var ctx = buildContext(token, parsed, scopePrefix);
+    var important = config.important || parsed.important;
+
+    // Alias (custom utility expansion)
+    if (utility.aliasTokens) {
+      var parts = utility.aliasTokens;
+      var out = "";
+      for (var i = 0; i < parts.length; i++) {
+        var aliasBase = parsed.important && parts[i].charAt(0) !== "!" ? "!" + parts[i] : parts[i];
+        var aliasToken = parsed.variants.length ? parsed.variants.join(":") + ":" + aliasBase : aliasBase;
+        out += compileToken(aliasToken, ctx.selector, scopePrefix) || "";
+      }
+      return out;
+    }
+
+    var rules = utility.rules || [{selector:"&", declarations: utility.declarations || utility}];
+    var chunks = [];
+    if (utility.keyframes) chunks.push(utility.keyframes);
+
+    for (var r = 0; r < rules.length; r++) {
+      var rule = rules[r];
+      var rSel = rule.selector ? rule.selector.replace(/&/g, ctx.selector) : ctx.selector;
+      var decls = declsToString(typeof rule.declarations === "string" ? rule.declarations : rule.declarations, important);
+      if (decls) chunks.push(wrapInMediaDark(rSel + "{" + decls + "}", ctx));
+    }
+
+    return chunks.join("");
+  }
+
+  function wrapInMediaDark(css, ctx) {
+    var out = css;
+
+    // Dark mode wrapping (correct order: dark THEN media)
+    if (ctx.dark) {
+      var dm = config.darkMode || "media";
+      if (dm === "class") {
+        out = ".dark " + out;
+      } else if (dm === "media") {
+        out = "@media (prefers-color-scheme:dark){" + out + "}";
+      } else { // both
+        out = ".dark " + out + "@media (prefers-color-scheme:dark){" + out + "}";
+      }
+    }
+
+    // Responsive media wrapping (outermost)
+    for (var m = ctx.media.length - 1; m >= 0; m--) {
+      out = "@media " + ctx.media[m] + "{" + out + "}";
+    }
+
+    return out;
+  }
+
+  function declsToString(decls, important) {
+    if (!decls) return "";
+    if (typeof decls === "string") return decls;
+    var sfx = important ? "!important" : "";
+    var s = "";
+    var keys = Object.keys(decls);
+    for (var i = 0; i < keys.length; i++) {
+      var v = decls[keys[i]];
+      if (v === null || v === undefined || v === "") continue;
+      s += keys[i] + ":" + v + sfx + ";";
+    }
+    return s;
+  }
+
+  // ─── MAIN COMPILER ─────────────────────────────────────────────────────────
+
+  function compileToken(token, selectorOverride, scopePrefix) {
+    if (!token || typeof token !== "string") return "";
+    try {
+      var parsed = parseToken(token);
+      var base   = parsed.base;
+
+      // Custom user utilities (aliases)
+      var customUtil = config.utilities && config.utilities[base];
+      if (customUtil) {
+        var normalized = normalizeCustom(customUtil);
+        if (!normalized) return "";
+        if (selectorOverride) normalized._selectorOverride = selectorOverride;
+        return buildCSS(token, parsed, normalized, scopePrefix);
+      }
+
+      // Static map
+      var staticDecls = staticMap[base];
+      if (staticDecls) {
+        var ctx = buildContext(token, parsed, scopePrefix);
+        if (selectorOverride) ctx.selector = selectorOverride;
+        var decls = declsToString(staticDecls, config.important || parsed.important);
+        return decls ? wrapInMediaDark(ctx.selector + "{" + decls + "}", ctx) : "";
+      }
+
+      // Dynamic resolver
+      var neg = base.charAt(0) === "-";
+      var lookupBase = neg ? base.slice(1) : base;
+      var dyn = resolveDynamic(lookupBase, neg, config.theme);
+      if (!dyn) {
+        warnToken(token, "No matching utility.");
+        return "";
+      }
+
+      var ctx2 = buildContext(token, parsed, scopePrefix);
+      if (selectorOverride) ctx2.selector = selectorOverride;
+      return buildCSS(token, parsed, dyn, scopePrefix);
+
+    } catch (err) {
+      warnToken(token, err && err.message ? err.message : "Compile error");
+      return "";
+    }
+  }
+
+  function normalizeCustom(val) {
+    if (typeof val === "string") {
+      var t = val.trim();
+      if (!t) return null;
+      if (t.indexOf(";") !== -1 || t.indexOf("{") !== -1) return {declarations: t};
+      return {aliasTokens: splitClasses(t)};
+    }
+    if (Array.isArray(val)) {
+      var tokens = [];
+      for (var i = 0; i < val.length; i++) { if (typeof val[i] === "string") tokens = tokens.concat(splitClasses(val[i])); }
+      return {aliasTokens: tokens};
+    }
+    if (val && typeof val === "object") {
+      if (val.aliasTokens || val.declarations || val.rules) return val;
+      return {declarations: val};
+    }
+    return null;
+  }
+
+  // ─── APPLY (component classes) ─────────────────────────────────────────────
+
+  function renderApply() {
+    var applyMap = config.apply || {};
+    var css = "";
+    var keys = Object.keys(applyMap);
+    for (var i = 0; i < keys.length; i++) {
+      var selector = keys[i];
+      var classes   = applyMap[selector];
+      var tokens    = splitClasses(String(classes));
+      for (var t = 0; t < tokens.length; t++) {
+        css += compileToken(tokens[t], selector, null) || "";
+      }
+    }
+    return css;
+  }
+
+  // ─── SCOPED MODE ───────────────────────────────────────────────────────────
+  // jf-scope-[name] on a container: all JetFlow styles inside are prefixed with .jf-scope-[name]
+
+  var SCOPE_RE = /^jf-scope-\[([A-Za-z0-9_-]+)\]$/;
+
+  function getScopePrefix(classList) {
+    var classes = splitClasses(classList);
+    for (var i = 0; i < classes.length; i++) {
+      var m = SCOPE_RE.exec(classes[i]);
+      if (m) return ".jf-scope-" + m[1];
+    }
+    return null;
+  }
+
+  // ─── DOM ENGINE ────────────────────────────────────────────────────────────
+
+  var tokenCache    = new Map();   // token+scope → CSS string
+  var ruleSet       = new Set();   // deduplication of inserted CSS rules
+  var processedEls  = typeof WeakSet !== "undefined" ? new WeakSet() : null; // track processed elements
+  var nodeTokenMap  = typeof WeakMap !== "undefined" ? new WeakMap() : null; // node → {tokens, scopePrefix}
+  var pendingTokens = new Map();   // key → {token, scopePrefix}
+  var styleEl       = null;
+  var scheduled     = false;
+  var observer      = null;
+  var started       = false;
+  var warnedTokens  = new Set();
+
+  function ensureStyle() {
+    if (styleEl && styleEl.parentNode) return;
+    styleEl = document.getElementById(STYLE_ID);
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = STYLE_ID;
+      styleEl.setAttribute("data-jf", VERSION);
+      (document.head || document.documentElement).appendChild(styleEl);
+    }
+  }
+
+  function scanElement(el) {
+    if (!el || el.nodeType !== 1) return;
+    var cls = el.getAttribute("class") || "";
+    var scopePrefix = getScopePrefix(cls);
+    var tokens = splitClasses(cls).filter(function(t) { return !SCOPE_RE.test(t); });
+
+    if (nodeTokenMap) nodeTokenMap.set(el, {tokens: tokens, scopePrefix: scopePrefix});
+    if (processedEls) processedEls.add(el);
+
+    for (var i = 0; i < tokens.length; i++) {
+      var key = tokens[i] + "\x00" + (scopePrefix || "");
+      if (!pendingTokens.has(key)) {
+        pendingTokens.set(key, {token: tokens[i], scopePrefix: scopePrefix});
+      }
+    }
+  }
+
+  function scanDOM() {
+    pendingTokens.clear();
+    if (nodeTokenMap && typeof WeakMap !== "undefined") {
+      // Re-create WeakMap (can't clear, but old entries GC'd)
+    }
+    var all = document.querySelectorAll("[class]");
+    for (var i = 0; i < all.length; i++) scanElement(all[i]);
+    // Safelist
+    var sl = config.safelist || [];
+    for (var s = 0; s < sl.length; s++) {
+      if (typeof sl[s] !== "string") continue;
+      var tks = splitClasses(sl[s]);
+      for (var t = 0; t < tks.length; t++) {
+        var key = tks[t] + "\x00";
+        if (!pendingTokens.has(key)) pendingTokens.set(key, {token: tks[t], scopePrefix: null});
+      }
+    }
+  }
+
+  function flush() {
+    ensureStyle();
+    var parts = [];
+
+    if (config.reset !== false) parts.push(RESET_CSS);
+
+    // Theme CSS variables on :root
+    parts.push(buildThemeVars());
+
+    // Apply (component classes)
+    parts.push(renderApply());
+
+    // Compile pending tokens (batched)
+    pendingTokens.forEach(function(entry, key) {
+      if (tokenCache.has(key)) {
+        var cached = tokenCache.get(key);
+        if (cached && !ruleSet.has(cached)) { ruleSet.add(cached); parts.push(cached); }
+        return;
+      }
+      var css = compileToken(entry.token, null, entry.scopePrefix) || "";
+      tokenCache.set(key, css);
+      if (css && !ruleSet.has(css)) { ruleSet.add(css); parts.push(css); }
+    });
+
+    var next = parts.filter(Boolean).join("\n");
+    if (styleEl && styleEl.textContent !== next) styleEl.textContent = next;
+    return next;
+  }
+
+  function scheduleFlush() {
+    if (scheduled) return;
+    scheduled = true;
+    var run = global.requestAnimationFrame || function(fn) { global.setTimeout(fn, config.mutationDebounce || 16); };
+    run(function() { scheduled = false; flush(); });
+  }
+
+  // ─── THEME VARIABLES ───────────────────────────────────────────────────────
+
+  function buildThemeVars() {
+    // Expose key theme values as CSS custom properties for runtime theming
+    var t = config.theme;
+    var css = ":root{";
+    // Colors
+    flattenColors(t.colors || {}, "--jf-color-", function(k, v) { css += k + ":" + v + ";"; });
+    css += "}";
+    return css;
+  }
+
+  function flattenColors(obj, prefix, cb) {
+    var keys = Object.keys(obj);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var v = obj[k];
+      if (typeof v === "string") cb(prefix + k, v);
+      else if (v && typeof v === "object") flattenColors(v, prefix + k + "-", cb);
+    }
+  }
+
+  // ─── MUTATIONOBSERVER (only new/changed nodes) ─────────────────────────────
 
   function start() {
-    if (started) {
-      refresh();
-      return JetFlow;
-    }
-
+    if (started) { flush(); return JetFlow; }
     started = true;
-    ensureStyleElement();
-    scanDocument();
-    refresh();
+    ensureStyle();
+    scanDOM();
+    flush();
 
-    observer = new MutationObserver(function handleMutations(mutations) {
-      var shouldRefresh = false;
-      for (var i = 0; i < mutations.length; i += 1) {
-        var mutation = mutations[i];
-        if (mutation.type === "childList") {
-          if (isJetFlowStyleNode(mutation.target)) styleApplyDirty = true;
-          for (var r = 0; r < mutation.removedNodes.length; r += 1) {
-            unregisterNodeTree(mutation.removedNodes[r]);
+    observer = new MutationObserver(function(mutations) {
+      var dirty = false;
+      for (var i = 0; i < mutations.length; i++) {
+        var m = mutations[i];
+        if (m.type === "childList") {
+          // Only process NEW added nodes, not the whole DOM
+          for (var a = 0; a < m.addedNodes.length; a++) {
+            var node = m.addedNodes[a];
+            if (node.nodeType === 1) {
+              scanElement(node);
+              // Also scan children of added subtree
+              var children = node.querySelectorAll ? node.querySelectorAll("[class]") : [];
+              for (var c = 0; c < children.length; c++) scanElement(children[c]);
+              dirty = true;
+            }
           }
-          for (var a = 0; a < mutation.addedNodes.length; a += 1) {
-            registerNodeTree(mutation.addedNodes[a]);
+        } else if (m.type === "attributes" && m.attributeName === "class") {
+          // Only re-process the changed element
+          if (m.target && m.target.nodeType === 1) {
+            scanElement(m.target);
+            dirty = true;
           }
-          shouldRefresh = true;
-          continue;
-        }
-        if (mutation.type === "attributes" && (mutation.attributeName === "class" || mutation.attributeName === "data-jetflow" || mutation.attributeName === "style")) {
-          if (isJetFlowStyleNode(mutation.target)) {
-            styleApplyDirty = true;
-          } else {
-            updateNodeTokens(mutation.target);
-          }
-          shouldRefresh = true;
-          continue;
-        }
-        if (mutation.type === "characterData") {
-          if (mutation.target && isJetFlowStyleNode(mutation.target.parentNode)) {
-            styleApplyDirty = true;
-          }
-          shouldRefresh = true;
         }
       }
-      if (shouldRefresh) scheduleRefresh();
+      if (dirty) scheduleFlush();
     });
 
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["class", "data-jetflow", "style"],
-      characterData: true
+      attributeFilter: ["class"]
     });
 
     return JetFlow;
@@ -1080,1934 +1473,195 @@ import importedConfig from "./jetflow.config.js";
     return JetFlow;
   }
 
-  function init(nextConfig) {
-    config = createConfig(nextConfig || {});
-    JetFlow.config = config;
+  // ─── CONFIG ────────────────────────────────────────────────────────────────
+
+  var config = {};
+  var staticMap = {};
+
+  function applyConfig(userCfg) {
+    config = deepMerge(deepClone(DEFAULT_CONFIG), userCfg || {});
+    if (userCfg && userCfg.theme && userCfg.theme.extend) {
+      delete config.theme.extend;
+      config.theme = deepMerge(config.theme, userCfg.theme.extend);
+    }
+    staticMap = buildStaticMap();
+    // Clear caches on config change
     tokenCache.clear();
-    utilityCache.clear();
-    tokenRegistry.clear();
-    tokenSequence = 0;
-    configRevision += 1;
-    compositionCache = null;
-    compositionCacheRevision = -1;
-    semanticPresetDirty = true;
-    styleApplyDirty = true;
-    invalidTokenWarnings.clear();
-    fullScanRequired = true;
-    if (started) refresh({ full: true });
-    return JetFlow;
-  }
-
-  function configure(nextConfig) {
-    return init(deepMerge(deepClone(config), nextConfig || {}));
-  }
-
-  function scheduleRefresh() {
-    if (scheduled) return;
-    scheduled = true;
-    var runner = global.requestAnimationFrame || global.setTimeout;
-    runner(function runScheduledRefresh() {
-      scheduled = false;
-      refresh();
-    }, config.mutationDebounce || 16);
-  }
-
-  function refresh(options) {
-    ensureStyleElement();
-    if (!styleElement) return "";
-
-    if (options && options.full) fullScanRequired = true;
-    if (fullScanRequired) scanDocument();
-
-    var entries = getActiveTokenEntries();
-    var css = [];
-    var seenCss = new Set();
-
-    if (config.reset !== false) pushCss(css, seenCss, RESET_CSS);
-
-    pushCss(css, seenCss, renderConfigBase());
-    pushCss(css, seenCss, renderApplyRules());
-    pushCss(css, seenCss, renderStyleTagApplyRules());
-
-    entries.forEach(function compileUsedToken(entry) {
-      var rule = ruleCache.get(entry.key);
-      if (rule === undefined) {
-        rule = compileToken(entry.token, entry.selector, true) || "";
-        ruleCache.set(entry.key, rule);
-      }
-      pushCss(css, seenCss, rule);
-    });
-
-    var nextCss = css.filter(Boolean).join("\n");
-    if (styleElement.textContent !== nextCss) {
-      styleElement.textContent = nextCss;
-    }
-    return nextCss;
-  }
-
-  function ensureStyleElement() {
-    if (styleElement && styleElement.parentNode) return styleElement;
-    styleElement = document.getElementById(STYLE_ID);
-    if (!styleElement) {
-      styleElement = document.createElement("style");
-      styleElement.id = STYLE_ID;
-      styleElement.setAttribute("data-jetflow-runtime", VERSION);
-      styleElement.appendChild(document.createTextNode(""));
-      (document.head || document.documentElement).appendChild(styleElement);
-    }
-    return styleElement;
-  }
-
-  function pushCss(css, seenCss, rule) {
-    if (!rule) return;
-    if (seenCss.has(rule)) return;
-    seenCss.add(rule);
-    css.push(rule);
-  }
-
-  function scanDocument() {
-    tokenRegistry.clear();
-    tokenSequence = 0;
-    if (nodeTokenRegistry && typeof WeakMap !== "undefined") nodeTokenRegistry = new WeakMap();
-
-    var nodes = document.querySelectorAll("[class],[data-jetflow]");
-    for (var i = 0; i < nodes.length; i += 1) {
-      updateNodeTokens(nodes[i]);
-    }
-
-    fullScanRequired = false;
-  }
-
-  function registerNodeTree(node) {
-    if (!node || node.nodeType !== 1) return;
-
-    updateNodeTokens(node);
-    if (isJetFlowStyleNode(node)) styleApplyDirty = true;
-
-    if (!node.querySelectorAll) return;
-    var nodes = node.querySelectorAll("[class],[data-jetflow],style[type=\"text/jetflow\"],style[data-jetflow-apply]");
-    for (var i = 0; i < nodes.length; i += 1) {
-      if (isJetFlowStyleNode(nodes[i])) {
-        styleApplyDirty = true;
-      } else {
-        updateNodeTokens(nodes[i]);
-      }
-    }
-  }
-
-  function unregisterNodeTree(node) {
-    if (!node || node.nodeType !== 1) return;
-
-    unregisterNodeTokens(node);
-    if (isJetFlowStyleNode(node)) styleApplyDirty = true;
-
-    if (!node.querySelectorAll) return;
-    var nodes = node.querySelectorAll("[class],[data-jetflow],style[type=\"text/jetflow\"],style[data-jetflow-apply]");
-    for (var i = 0; i < nodes.length; i += 1) {
-      if (isJetFlowStyleNode(nodes[i])) {
-        styleApplyDirty = true;
-      } else {
-        unregisterNodeTokens(nodes[i]);
-      }
-    }
-  }
-
-  function updateNodeTokens(node) {
-    if (!node || node.nodeType !== 1 || !nodeTokenRegistry) return;
-
-    unregisterNodeTokens(node);
-
-    var entries = [];
-    entries = entries.concat(parseClassValue(node.getAttribute("class"), "class"));
-    entries = entries.concat(parseClassValue(node.getAttribute("data-jetflow"), "data-jetflow"));
-
-    var keys = [];
-    for (var i = 0; i < entries.length; i += 1) {
-      var key = registerTokenEntry(entries[i]);
-      if (key) keys.push(key);
-    }
-
-    nodeTokenRegistry.set(node, keys);
-  }
-
-  function unregisterNodeTokens(node) {
-    if (!nodeTokenRegistry) return;
-
-    var keys = nodeTokenRegistry.get(node);
-    if (!keys) return;
-
-    for (var i = 0; i < keys.length; i += 1) {
-      var entry = tokenRegistry.get(keys[i]);
-      if (!entry) continue;
-      entry.count -= 1;
-      if (entry.count <= 0) tokenRegistry.delete(keys[i]);
-    }
-
-    nodeTokenRegistry.delete(node);
-  }
-
-  function registerTokenEntry(entry) {
-    if (!entry || !entry.token) return "";
-
-    var info = classifyToken(entry.token);
-    entry.type = entry.type || info.type;
-    entry.modifiers = info.modifiers;
-    entry.base = info.base;
-    entry.priority = tokenPriority(info);
-    entry.key = tokenEntryKey(entry);
-
-    var existing = tokenRegistry.get(entry.key);
-    if (existing) {
-      existing.count += 1;
-    } else {
-      entry.count = 1;
-      entry.order = tokenSequence;
-      tokenSequence += 1;
-      tokenRegistry.set(entry.key, entry);
-    }
-
-    return entry.key;
-  }
-
-  function getActiveTokenEntries() {
-    var entries = [];
-    tokenRegistry.forEach(function addRegisteredEntry(entry) {
-      if (entry.count > 0) entries.push(entry);
-    });
-
-    flattenToArray(config.safelist).forEach(function addSafelistedToken(value) {
-      if (typeof value !== "string") return;
-      parseClassValue(value, "class").forEach(function addSafelistEntry(entry) {
-        var info = classifyToken(entry.token);
-        entry.type = entry.type || info.type;
-        entry.modifiers = info.modifiers;
-        entry.base = info.base;
-        entry.priority = tokenPriority(info);
-        entry.order = tokenSequence + entries.length;
-        entry.key = tokenEntryKey(entry);
-        entries.push(entry);
-      });
-    });
-
-    var seen = new Set();
-    return entries.filter(function uniqueEntry(entry) {
-      if (seen.has(entry.key)) return false;
-      seen.add(entry.key);
-      return true;
-    }).sort(function sortByPriority(a, b) {
-      if (a.priority !== b.priority) return a.priority - b.priority;
-      return (a.order || 0) - (b.order || 0);
-    });
-  }
-
-  function tokenEntryKey(entry) {
-    return entry.token + "\n" + (entry.selector || "");
-  }
-
-  function tokenPriority(infoOrToken) {
-    var info = typeof infoOrToken === "string" ? classifyToken(infoOrToken) : infoOrToken;
-    if (info.type === "semantic") return 1;
-    if (info.type === "arbitrary") return 3;
-    return 2;
-  }
-
-  function isInlineArbitraryToken(token) {
-    return classifyToken(token).type === "arbitrary";
-  }
-
-  function classifyToken(token) {
-    var parsed = parseToken(token || "");
-    var base = parsed.base || "";
-    var type = "utility";
-
-    if (isGroupedToken(token || "")) {
-      type = "grouped";
-    } else if (base.indexOf("[") !== -1 && base.indexOf("]") !== -1) {
-      type = "arbitrary";
-    } else if (getSemanticPreset(base) !== undefined) {
-      type = "semantic";
-    }
-
-    return {
-      raw: token,
-      type: type,
-      modifiers: parsed.modifiers,
-      base: base,
-      important: parsed.important
-    };
-  }
-
-  function parseClassValue(value, attributeName) {
-    if (!value || typeof value !== "string") return [];
-
-    var chunks = splitClassValue(value);
-    var entries = [];
-
-    for (var i = 0; i < chunks.length; i += 1) {
-      var chunk = chunks[i];
-      if (!chunk) continue;
-
-      if (isGroupedToken(chunk)) {
-        var selector = buildAttributeSelector(attributeName, chunk);
-        var expanded = expandGroupToken(chunk, []);
-        for (var e = 0; e < expanded.length; e += 1) {
-          entries.push({ token: expanded[e], selector: selector, sourceType: "grouped" });
-        }
-      } else {
-        entries.push({ token: chunk, selector: null });
-      }
-    }
-
-    return entries;
-  }
-
-  function splitClassValue(value) {
-    var chunks = [];
-    var current = "";
-    var bracketDepth = 0;
-    var parenDepth = 0;
-    var escaped = false;
-
-    for (var i = 0; i < value.length; i += 1) {
-      var char = value.charAt(i);
-
-      if (escaped) {
-        current += char;
-        escaped = false;
-        continue;
-      }
-
-      if (char === "\\") {
-        current += char;
-        escaped = true;
-        continue;
-      }
-
-      if (char === "[" && parenDepth >= 0) bracketDepth += 1;
-      if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1);
-      if (char === "(" && bracketDepth === 0) parenDepth += 1;
-      if (char === ")" && bracketDepth === 0) parenDepth = Math.max(0, parenDepth - 1);
-
-      if (/\s/.test(char) && bracketDepth === 0 && parenDepth === 0) {
-        if (current) {
-          chunks.push(current);
-          current = "";
-        }
-      } else {
-        current += char;
-      }
-    }
-
-    if (current) chunks.push(current);
-    return chunks;
-  }
-
-  function isGroupedToken(token) {
-    var group = findGroupBounds(token);
-    return group && group.end === token.length - 1;
-  }
-
-  function expandGroupToken(token, inheritedModifiers) {
-    var group = findGroupBounds(token);
-    if (!group) return [joinModifiers(inheritedModifiers, token)];
-
-    var prefix = token.slice(0, group.start);
-    var modifiers = inheritedModifiers.slice();
-    if (prefix) {
-      if (prefix.charAt(prefix.length - 1) === ":") prefix = prefix.slice(0, -1);
-      modifiers = modifiers.concat(splitOutsideBrackets(prefix, ":").filter(Boolean));
-    }
-
-    var content = token.slice(group.start + 1, group.end);
-    var chunks = splitClassValue(content);
-    var expanded = [];
-
-    for (var i = 0; i < chunks.length; i += 1) {
-      if (isGroupedToken(chunks[i])) {
-        expanded = expanded.concat(expandGroupToken(chunks[i], modifiers));
-      } else {
-        expanded.push(joinModifiers(modifiers, chunks[i]));
-      }
-    }
-
-    return expanded;
-  }
-
-  function findGroupBounds(token) {
-    var bracketDepth = 0;
-    var parenDepth = 0;
-    var start = -1;
-    var escaped = false;
-
-    for (var i = 0; i < token.length; i += 1) {
-      var char = token.charAt(i);
-
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (char === "\\") {
-        escaped = true;
-        continue;
-      }
-      if (char === "[") bracketDepth += 1;
-      if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1);
-      if (bracketDepth > 0) continue;
-
-      if (char === "(") {
-        if (parenDepth === 0) start = i;
-        parenDepth += 1;
-      } else if (char === ")") {
-        parenDepth -= 1;
-        if (parenDepth === 0) return { start: start, end: i };
-      }
-    }
-
-    return null;
-  }
-
-  function joinModifiers(modifiers, token) {
-    var filtered = modifiers.filter(Boolean);
-    return filtered.length ? filtered.join(":") + ":" + token : token;
-  }
-
-  function compileToken(token, selectorOverride, cacheable, stack) {
-    if (!token || typeof token !== "string") return "";
-
-    try {
-      var parsed = parseToken(token);
-      if (!parsed.base) return "";
-
-      var utility = resolveUtility(parsed.base);
-      if (!utility) {
-        warnInvalidToken(token, "No matching JetFlow utility was found.");
-        return "";
-      }
-
-      var selector = selectorOverride || "." + cssEscape(token);
-
-      if (utility.aliasTokens) {
-        return compileAliasTokens(token, parsed, selector, utility.aliasTokens, stack);
-      }
-
-      var context = createSelectorContext(selector);
-
-      for (var i = 0; i < parsed.modifiers.length; i += 1) {
-        applyModifier(context, parsed.modifiers[i]);
-      }
-
-      var important = config.important || parsed.important;
-      if (utility.important) important = true;
-
-      var css = renderUtility(context, utility, important);
-      if (!cacheable) return css;
-      return css;
-    } catch (error) {
-      warnInvalidToken(token, error && error.message ? error.message : "Compilation failed.");
-      return "";
-    }
-  }
-
-  function compileAliasTokens(token, parsed, selector, aliasTokens, stack) {
-    stack = stack || [];
-    if (stack.indexOf(token) !== -1) {
-      warnInvalidToken(token, "Circular readable utility alias ignored.");
-      return "";
-    }
-
-    var css = "";
-    for (var i = 0; i < aliasTokens.length; i += 1) {
-      var aliasBase = parsed.important && aliasTokens[i].charAt(0) !== "!" ? "!" + aliasTokens[i] : aliasTokens[i];
-      var aliasToken = joinModifiers(parsed.modifiers, aliasBase);
-      css += compileToken(aliasToken, selector, false, stack.concat([token])) || "";
-    }
-    return css;
-  }
-
-  function parseToken(token) {
-    var parts = splitOutsideBrackets(token, ":");
-    var base = parts.pop() || "";
-    var important = false;
-
-    if (base.charAt(0) === "!") {
-      important = true;
-      base = base.slice(1);
-    }
-    if (base.charAt(base.length - 1) === "!") {
-      important = true;
-      base = base.slice(0, -1);
-    }
-
-    return {
-      modifiers: parts,
-      base: base,
-      important: important
-    };
-  }
-
-  function splitOutsideBrackets(value, separator) {
-    var parts = [];
-    var current = "";
-    var depth = 0;
-    var escaped = false;
-
-    for (var i = 0; i < value.length; i += 1) {
-      var char = value.charAt(i);
-
-      if (escaped) {
-        current += char;
-        escaped = false;
-        continue;
-      }
-
-      if (char === "\\") {
-        current += char;
-        escaped = true;
-        continue;
-      }
-
-      if (char === "[") depth += 1;
-      if (char === "]") depth = Math.max(0, depth - 1);
-
-      if (char === separator && depth === 0) {
-        parts.push(current);
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-
-    parts.push(current);
-    return parts;
-  }
-
-  function createSelectorContext(selector) {
-    return {
-      selector: selector,
-      media: [],
-      containers: [],
-      dark: false
-    };
-  }
-
-  function applyModifier(context, modifier) {
-    if (!modifier) return;
-
-    if (config.screens[modifier]) {
-      context.media.push("(min-width: " + config.screens[modifier] + ")");
-      return;
-    }
-
-    if (modifier === "dark") {
-      context.dark = true;
-      return;
-    }
-
-    if (pseudoModifiers[modifier]) {
-      context.selector += pseudoModifiers[modifier];
-      return;
-    }
-
-    if (modifier.indexOf("group-") === 0) {
-      var groupState = modifier.slice(6);
-      var groupPseudo = pseudoModifiers[groupState] || ":" + groupState;
-      context.selector = ".group" + groupPseudo + " " + context.selector;
-      return;
-    }
-
-    if (modifier.indexOf("peer-") === 0) {
-      var peerState = modifier.slice(5);
-      var peerPseudo = pseudoModifiers[peerState] || ":" + peerState;
-      context.selector = ".peer" + peerPseudo + " ~ " + context.selector;
-      return;
-    }
-
-    if (modifier.indexOf("cq-") === 0) {
-      var cqName = modifier.slice(3);
-      if (config.containers[cqName]) context.containers.push("(min-width: " + config.containers[cqName] + ")");
-      return;
-    }
-
-    if (modifier.charAt(0) === "@" && config.containers[modifier.slice(1)]) {
-      context.containers.push("(min-width: " + config.containers[modifier.slice(1)] + ")");
-      return;
-    }
-
-    if (modifier === "motion-safe") {
-      context.media.push("(prefers-reduced-motion: no-preference)");
-      return;
-    }
-
-    if (modifier === "motion-reduce") {
-      context.media.push("(prefers-reduced-motion: reduce)");
-      return;
-    }
-
-    if (modifier === "portrait" || modifier === "landscape") {
-      context.media.push("(orientation: " + modifier + ")");
-      return;
-    }
-
-    if (modifier === "print") {
-      context.media.push("print");
-      return;
-    }
-
-    if (modifier.indexOf("aria-") === 0) {
-      context.selector += "[aria-" + escapeAttributeName(modifier.slice(5)) + "=\"true\"]";
-      return;
-    }
-
-    if (modifier.indexOf("data-") === 0) {
-      context.selector += "[data-" + escapeAttributeName(modifier.slice(5)) + "]";
-    }
-  }
-
-  function renderUtility(context, utility, important) {
-    var chunks = [];
-    var rules = utility.rules || [{ selector: "&", declarations: utility.declarations || utility }];
-
-    if (utility.keyframes) chunks.push(utility.keyframes);
-
-    for (var i = 0; i < rules.length; i += 1) {
-      var rule = rules[i];
-      var selector = rule.selector ? rule.selector.replace(/&/g, context.selector) : context.selector;
-      var declarations = typeof rule.declarations === "string" ? rule.declarations : stringifyDeclarations(rule.declarations, important);
-      if (declarations) chunks.push(wrapRule(selector + "{" + declarations + "}", context));
-    }
-
-    return chunks.join("");
-  }
-
-  function wrapRule(css, context) {
-    var output = css;
-
-    if (context.dark) {
-      var darkMode = config.darkMode || "both";
-      if (darkMode === "class") {
-        output = prefixClassSelectors(css, ".dark ");
-      } else if (darkMode === "media") {
-        output = "@media (prefers-color-scheme: dark){" + output + "}";
-      } else {
-        output = prefixClassSelectors(css, ".dark ") + "@media (prefers-color-scheme: dark){" + output + "}";
-      }
-    }
-
-    for (var c = context.containers.length - 1; c >= 0; c -= 1) {
-      output = "@container " + context.containers[c] + "{" + output + "}";
-    }
-
-    for (var m = context.media.length - 1; m >= 0; m -= 1) {
-      output = "@media " + context.media[m] + "{" + output + "}";
-    }
-
-    return output;
-  }
-
-  function prefixClassSelectors(ruleCss, prefix) {
-    var open = ruleCss.indexOf("{");
-    if (open === -1) return ruleCss;
-    var selectorText = ruleCss.slice(0, open);
-    var body = ruleCss.slice(open);
-    var selectors = selectorText.split(",").map(function mapSelector(selector) {
-      return prefix + selector.trim();
-    });
-    return selectors.join(",") + body;
-  }
-
-  function stringifyDeclarations(declarations, important) {
-    if (!declarations) return "";
-    if (typeof declarations === "string") return declarations;
-
-    var suffix = important ? "!important" : "";
-    var css = "";
-
-    Object.keys(declarations).forEach(function addDeclaration(prop) {
-      var value = declarations[prop];
-      if (value === null || value === undefined || value === "") return;
-      css += prop + ":" + value + suffix + ";";
-    });
-
-    return css;
-  }
-
-  function renderConfigBase() {
-    if (!config.base) return "";
-    if (typeof config.base === "string") return config.base;
-
-    var css = "";
-    Object.keys(config.base).forEach(function renderBaseSelector(selector) {
-      css += selector + "{" + stringifyDeclarations(config.base[selector], false) + "}";
-    });
-    return css;
-  }
-
-  function renderApplyRules() {
-    if (!semanticPresetDirty) return semanticPresetCss;
-
-    var composition = getComposition();
-    var css = "";
-
-    Object.keys(composition).forEach(function renderComposition(selector) {
-      if (isSimpleClassSelector(selector)) return;
-      css += compileApply(selector, composition[selector]);
-    });
-
-    semanticPresetCss = css;
-    semanticPresetDirty = false;
-    return semanticPresetCss;
-  }
-
-  function isSimpleClassSelector(selector) {
-    return /^\.[A-Za-z_-][A-Za-z0-9_-]*$/.test(selector || "");
-  }
-
-  function getSemanticPreset(base) {
-    if (!base) return undefined;
-    var composition = getComposition();
-    var selector = "." + base;
-    if (Object.prototype.hasOwnProperty.call(composition, selector)) return composition[selector];
-    return undefined;
-  }
-
-  function getComposition() {
-    if (compositionCache && compositionCacheRevision === configRevision) return compositionCache;
-    compositionCache = deepMerge({}, config.components || {}, config.apply || {});
-    compositionCacheRevision = configRevision;
-    return compositionCache;
-  }
-
-  function renderStyleTagApplyRules() {
-    if (!styleApplyDirty) return styleApplyCss;
-
-    var css = "";
-    var styles = document.querySelectorAll("style[type=\"text/jetflow\"],style[data-jetflow-apply]");
-
-    for (var i = 0; i < styles.length; i += 1) {
-      css += compileApplyStylesheet(styles[i].textContent || "");
-    }
-
-    styleApplyCss = css;
-    styleApplyDirty = false;
-    return styleApplyCss;
-  }
-
-  function compileApply(selector, classValue) {
-    var css = "";
-    var tokens = [];
-
-    if (Array.isArray(classValue)) {
-      flattenToArray(classValue).forEach(function addApplyArrayToken(item) {
-        if (typeof item === "string") {
-          tokens = tokens.concat(expandApplyClassValue(item));
-        }
-      });
-    } else if (typeof classValue === "string") {
-      tokens = expandApplyClassValue(classValue);
-    } else if (classValue && typeof classValue === "object") {
-      css += selector + "{" + stringifyDeclarations(classValue, false) + "}";
-    }
-
-    for (var i = 0; i < tokens.length; i += 1) {
-      if (tokens[i]) css += compileToken(tokens[i], selector, false) || "";
-    }
-
-    return css;
-  }
-
-  function expandApplyClassValue(classValue) {
-    var tokens = [];
-    var chunks = splitClassValue(classValue);
-
-    for (var i = 0; i < chunks.length; i += 1) {
-      if (isGroupedToken(chunks[i])) {
-        tokens = tokens.concat(expandGroupToken(chunks[i], []));
-      } else if (chunks[i]) {
-        tokens.push(chunks[i]);
-      }
-    }
-
-    return tokens;
-  }
-
-  function compileApplyStylesheet(source) {
-    var css = "";
-    var blockPattern = /([^{}]+)\{([^{}]*@apply[^{}]*)\}/g;
-    var block;
-
-    while ((block = blockPattern.exec(source))) {
-      var selector = block[1].trim();
-      var body = block[2];
-      var declarations = body.replace(/@apply\s+([^;]+);?/g, function expandApply(_, classValue) {
-        css += compileApply(selector, classValue);
-        return "";
-      }).trim();
-
-      if (selector && declarations) {
-        css += selector + "{" + declarations + "}";
-      }
-    }
-
-    return css;
-  }
-
-  function resolveUtility(base) {
-    if (!base || base === "group" || base === "peer") return null;
-
-    var cacheKey = configRevision + "::" + base;
-    if (utilityCache.has(cacheKey)) return utilityCache.get(cacheKey);
-
-    var resolved = resolveUtilityInner(base);
-    utilityCache.set(cacheKey, resolved || null);
-    return resolved;
-  }
-
-  function resolveUtilityInner(base) {
-    var semanticPreset = getSemanticPreset(base);
-    if (semanticPreset !== undefined) return normalizeCustomUtility(semanticPreset);
-
-    if (config.utilities && config.utilities[base]) return normalizeCustomUtility(config.utilities[base]);
-
-    var negative = false;
-    if (base.charAt(0) === "-") {
-      negative = true;
-      base = base.slice(1);
-    }
-
-    var dynamic = resolveDynamicUtility(base, negative);
-    if (dynamic) return dynamic;
-
-    if (directUtilities[base]) {
-      var direct = cloneUtility(directUtilities[base]);
-      if (negative) direct = negateUtility(direct);
-      return { declarations: direct };
-    }
-
-    var generated = resolveGeneratedUtility(base, negative);
-    if (generated) return generated;
-
-    return null;
-  }
-
-  function resolveGeneratedUtility(base, negative) {
-    var theme = config.theme;
-    var key;
-    var value;
-    var color;
-
-    if (/^grid-cols-\d+$/.test(base)) {
-      key = base.slice(10);
-      return { declarations: { "grid-template-columns": "repeat(" + key + ",minmax(0,1fr))" } };
-    }
-
-    if (/^grid-rows-\d+$/.test(base)) {
-      key = base.slice(10);
-      return { declarations: { "grid-template-rows": "repeat(" + key + ",minmax(0,1fr))" } };
-    }
-
-    if (/^col-span-\d+$/.test(base)) {
-      key = base.slice(9);
-      return { declarations: { "grid-column": "span " + key + " / span " + key } };
-    }
-
-    if (/^row-span-\d+$/.test(base)) {
-      key = base.slice(9);
-      return { declarations: { "grid-row": "span " + key + " / span " + key } };
-    }
-
-    if (/^col-start-\d+$/.test(base)) return { declarations: { "grid-column-start": base.slice(10) } };
-    if (/^col-end-\d+$/.test(base)) return { declarations: { "grid-column-end": base.slice(8) } };
-    if (/^row-start-\d+$/.test(base)) return { declarations: { "grid-row-start": base.slice(10) } };
-    if (/^row-end-\d+$/.test(base)) return { declarations: { "grid-row-end": base.slice(8) } };
-
-    var spacing = spacingUtility(base, negative);
-    if (spacing) return spacing;
-
-    var sizing = sizingUtility(base, negative);
-    if (sizing) return sizing;
-
-    var typography = typographyUtility(base);
-    if (typography) return typography;
-
-    var colorUtility = generatedColorUtility(base);
-    if (colorUtility) return colorUtility;
-
-    var borderUtility = generatedBorderUtility(base);
-    if (borderUtility) return borderUtility;
-
-    var effectUtility = generatedEffectUtility(base);
-    if (effectUtility) return effectUtility;
-
-    var filterUtility = generatedFilterUtility(base, negative);
-    if (filterUtility) return filterUtility;
-
-    var transitionUtility = generatedTransitionUtility(base);
-    if (transitionUtility) return transitionUtility;
-
-    var transformUtility = generatedTransformUtility(base, negative);
-    if (transformUtility) return transformUtility;
-
-    if (base.indexOf("aspect-") === 0) {
-      key = base.slice(7);
-      value = theme.aspectRatio[key];
-      if (value) return { declarations: { "aspect-ratio": value } };
-    }
-
-    if (base.indexOf("z-") === 0) {
-      key = base.slice(2);
-      value = resolveInlineOrThemeValue(key, theme.zIndex);
-      if (value !== undefined) return { declarations: { "z-index": negative ? "-" + value : value } };
-    }
-
-    if (base.indexOf("order-") === 0) {
-      key = base.slice(6);
-      var orderMap = { first: "-9999", last: "9999", none: "0" };
-      value = orderMap[key] || numericValue(key);
-      if (value !== undefined) return { declarations: { order: negative ? "-" + value : value } };
-    }
-
-    if (base.indexOf("animate-") === 0) {
-      key = base.slice(8);
-      value = theme.animation[key];
-      if (value) return { declarations: { animation: value }, keyframes: KEYFRAMES[key] || "" };
-    }
-
-    if (base.indexOf("fill-") === 0) {
-      color = resolveColorValue(base.slice(5));
-      if (color) return { declarations: { fill: color } };
-    }
-
-    if (base.indexOf("stroke-") === 0) {
-      key = base.slice(7);
-      value = resolveInlineOrThemeValue(key, theme.borderWidth);
-      if (value) return { declarations: { "stroke-width": value } };
-      color = resolveColorValue(key);
-      if (color) return { declarations: { stroke: color } };
-    }
-
-    return null;
-  }
-
-  function spacingUtility(base, negative) {
-    var spacingPrefixes = [
-      ["p", ["padding"]],
-      ["px", ["padding-left", "padding-right"]],
-      ["py", ["padding-top", "padding-bottom"]],
-      ["pt", ["padding-top"]],
-      ["pr", ["padding-right"]],
-      ["pb", ["padding-bottom"]],
-      ["pl", ["padding-left"]],
-      ["m", ["margin"]],
-      ["mx", ["margin-left", "margin-right"]],
-      ["my", ["margin-top", "margin-bottom"]],
-      ["mt", ["margin-top"]],
-      ["mr", ["margin-right"]],
-      ["mb", ["margin-bottom"]],
-      ["ml", ["margin-left"]],
-      ["gap", ["gap"]],
-      ["gap-x", ["column-gap"]],
-      ["gap-y", ["row-gap"]],
-      ["inset", ["top", "right", "bottom", "left"]],
-      ["inset-x", ["left", "right"]],
-      ["inset-y", ["top", "bottom"]],
-      ["top", ["top"]],
-      ["right", ["right"]],
-      ["bottom", ["bottom"]],
-      ["left", ["left"]]
-    ];
-
-    for (var i = 0; i < spacingPrefixes.length; i += 1) {
-      var prefix = spacingPrefixes[i][0];
-      if (base === prefix + "-auto") {
-        return { declarations: propsToValue(spacingPrefixes[i][1], "auto") };
-      }
-      if (base.indexOf(prefix + "-") === 0) {
-        var key = base.slice(prefix.length + 1);
-        var value = resolveSpacingValue(key);
-        if (value !== undefined) {
-          if (negative && value !== "0px") value = "-" + value;
-          return { declarations: propsToValue(spacingPrefixes[i][1], value) };
-        }
-      }
-    }
-
-    if (base.indexOf("space-x-") === 0) {
-      var x = resolveSpacingValue(base.slice(8));
-      if (x !== undefined) {
-        if (negative && x !== "0px") x = "-" + x;
-        return {
-          rules: [{
-            selector: "& > :not([hidden]) ~ :not([hidden])",
-            declarations: { "margin-left": x }
-          }]
-        };
-      }
-    }
-
-    if (base.indexOf("space-y-") === 0) {
-      var y = resolveSpacingValue(base.slice(8));
-      if (y !== undefined) {
-        if (negative && y !== "0px") y = "-" + y;
-        return {
-          rules: [{
-            selector: "& > :not([hidden]) ~ :not([hidden])",
-            declarations: { "margin-top": y }
-          }]
-        };
-      }
-    }
-
-    return null;
-  }
-
-  function sizingUtility(base, negative) {
-    var sizePrefixes = [
-      ["w", ["width"]],
-      ["min-w", ["min-width"]],
-      ["max-w", ["max-width"]],
-      ["h", ["height"]],
-      ["min-h", ["min-height"]],
-      ["max-h", ["max-height"]],
-      ["basis", ["flex-basis"]]
-    ];
-
-    for (var i = 0; i < sizePrefixes.length; i += 1) {
-      var prefix = sizePrefixes[i][0];
-      if (base.indexOf(prefix + "-") === 0) {
-        var key = base.slice(prefix.length + 1);
-        var value = resolveSizeValue(key, prefix);
-        if (value !== undefined) {
-          if (negative && value !== "0px") value = "-" + value;
-          return { declarations: propsToValue(sizePrefixes[i][1], value) };
-        }
-      }
-    }
-
-    return null;
-  }
-
-  function typographyUtility(base) {
-    var theme = config.theme;
-    var key;
-    var value;
-
-    if (base.indexOf("font-") === 0) {
-      key = base.slice(5);
-      value = theme.fontWeight[key];
-      if (value) return { declarations: { "font-weight": value } };
-      if (key === "sans") return { declarations: { "font-family": "system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif" } };
-      if (key === "serif") return { declarations: { "font-family": "ui-serif,Georgia,Cambria,\"Times New Roman\",Times,serif" } };
-      if (key === "mono") return { declarations: { "font-family": "ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace" } };
-    }
-
-    if (base.indexOf("text-") === 0) {
-      key = base.slice(5);
-      value = theme.fontSize[key];
-      if (value) {
-        if (Array.isArray(value)) return { declarations: { "font-size": value[0], "line-height": value[1] } };
-        return { declarations: { "font-size": value } };
-      }
-    }
-
-    if (base.indexOf("leading-") === 0) {
-      key = base.slice(8);
-      value = theme.lineHeight[key] || numericValue(key);
-      if (value) return { declarations: { "line-height": value } };
-    }
-
-    if (base.indexOf("tracking-") === 0) {
-      key = base.slice(9);
-      value = theme.letterSpacing[key];
-      if (value !== undefined) return { declarations: { "letter-spacing": value } };
-    }
-
-    if (base.indexOf("decoration-") === 0) {
-      var color = resolveColorValue(base.slice(11));
-      if (color) return { declarations: { "text-decoration-color": color } };
-      value = resolveSizeValue(base.slice(11));
-      if (value) return { declarations: { "text-decoration-thickness": value } };
-    }
-
-    if (base.indexOf("underline-offset-") === 0) {
-      value = resolveSizeValue(base.slice(17));
-      if (value) return { declarations: { "text-underline-offset": value } };
-    }
-
-    return null;
-  }
-
-  function generatedColorUtility(base) {
-    var color;
-
-    if (base.indexOf("bg-") === 0) {
-      color = resolveColorValue(base.slice(3));
-      if (color) return { declarations: { "background-color": color } };
-    }
-
-    if (base.indexOf("text-") === 0) {
-      color = resolveColorValue(base.slice(5));
-      if (color) return { declarations: { color: color } };
-    }
-
-    if (base.indexOf("border-") === 0) {
-      color = resolveColorValue(base.slice(7));
-      if (color) return { declarations: { "border-color": color } };
-    }
-
-    if (base.indexOf("outline-") === 0) {
-      color = resolveColorValue(base.slice(8));
-      if (color) return { declarations: { "outline-color": color } };
-    }
-
-    if (base.indexOf("ring-offset-") === 0) {
-      color = resolveColorValue(base.slice(12));
-      if (color) return { declarations: { "--jf-ring-offset-color": color, "--jf-ring-offset-shadow": "var(--jf-ring-inset,) 0 0 0 var(--jf-ring-offset-width,0px) var(--jf-ring-offset-color,#fff)", "box-shadow": RING_BOX_SHADOW } };
-    }
-
-    if (base.indexOf("ring-") === 0) {
-      color = resolveColorValue(base.slice(5));
-      if (color) return { declarations: { "--jf-ring-color": color, "box-shadow": RING_BOX_SHADOW } };
-    }
-
-    if (base.indexOf("caret-") === 0) {
-      color = resolveColorValue(base.slice(6));
-      if (color) return { declarations: { "caret-color": color } };
-    }
-
-    if (base.indexOf("accent-") === 0) {
-      color = resolveColorValue(base.slice(7));
-      if (color) return { declarations: { "accent-color": color } };
-    }
-
-    return null;
-  }
-
-  function generatedBorderUtility(base) {
-    var theme = config.theme;
-    var key;
-    var value;
-
-    if (base === "border") return { declarations: { "border-width": theme.borderWidth.DEFAULT || "1px" } };
-
-    if (base.indexOf("border-") === 0) {
-      key = base.slice(7);
-      value = theme.borderWidth[key];
-      if (value !== undefined) return { declarations: { "border-width": value } };
-    }
-
-    var sideMap = {
-      "border-x": ["border-left-width", "border-right-width"],
-      "border-y": ["border-top-width", "border-bottom-width"],
-      "border-t": ["border-top-width"],
-      "border-r": ["border-right-width"],
-      "border-b": ["border-bottom-width"],
-      "border-l": ["border-left-width"]
-    };
-
-    for (var side in sideMap) {
-      if (Object.prototype.hasOwnProperty.call(sideMap, side)) {
-        if (base === side) return { declarations: propsToValue(sideMap[side], theme.borderWidth.DEFAULT || "1px") };
-        if (base.indexOf(side + "-") === 0) {
-          key = base.slice(side.length + 1);
-          value = theme.borderWidth[key];
-          if (value !== undefined) return { declarations: propsToValue(sideMap[side], value) };
-        }
-      }
-    }
-
-    if (base === "rounded") return { declarations: { "border-radius": theme.borderRadius.DEFAULT || "0.25rem" } };
-    if (base.indexOf("rounded-") === 0) {
-      key = base.slice(8);
-      value = theme.borderRadius[key];
-      if (value !== undefined) return { declarations: { "border-radius": value } };
-    }
-
-    var radiusSideMap = {
-      "rounded-t": ["border-top-left-radius", "border-top-right-radius"],
-      "rounded-r": ["border-top-right-radius", "border-bottom-right-radius"],
-      "rounded-b": ["border-bottom-right-radius", "border-bottom-left-radius"],
-      "rounded-l": ["border-top-left-radius", "border-bottom-left-radius"],
-      "rounded-tl": ["border-top-left-radius"],
-      "rounded-tr": ["border-top-right-radius"],
-      "rounded-br": ["border-bottom-right-radius"],
-      "rounded-bl": ["border-bottom-left-radius"]
-    };
-
-    for (var radiusSide in radiusSideMap) {
-      if (Object.prototype.hasOwnProperty.call(radiusSideMap, radiusSide)) {
-        if (base === radiusSide) return { declarations: propsToValue(radiusSideMap[radiusSide], theme.borderRadius.DEFAULT || "0.25rem") };
-        if (base.indexOf(radiusSide + "-") === 0) {
-          key = base.slice(radiusSide.length + 1);
-          value = theme.borderRadius[key];
-          if (value !== undefined) return { declarations: propsToValue(radiusSideMap[radiusSide], value) };
-        }
-      }
-    }
-
-    return null;
-  }
-
-  function generatedEffectUtility(base) {
-    var theme = config.theme;
-    var key;
-    var value;
-
-    if (base === "shadow") {
-      return { declarations: { "--jf-shadow": theme.boxShadow.DEFAULT, "box-shadow": RING_BOX_SHADOW } };
-    }
-
-    if (base.indexOf("shadow-") === 0) {
-      key = base.slice(7);
-      value = theme.boxShadow[key];
-      if (value) return { declarations: { "--jf-shadow": value, "box-shadow": RING_BOX_SHADOW } };
-      var color = resolveColorValue(key);
-      if (color) return { declarations: { "--jf-shadow-color": color } };
-    }
-
-    if (base.indexOf("opacity-") === 0) {
-      key = base.slice(8);
-      value = theme.opacity[key];
-      if (value !== undefined) return { declarations: { opacity: value } };
-    }
-
-    return null;
-  }
-
-  function generatedFilterUtility(base, negative) {
-    var theme = config.theme;
-    var key;
-    var value;
-
-    if (base === "blur") return { declarations: { "--jf-blur": theme.blur.DEFAULT, filter: FILTER_VALUE } };
-    if (base.indexOf("blur-") === 0) {
-      key = base.slice(5);
-      value = theme.blur[key];
-      if (value !== undefined) return { declarations: { "--jf-blur": value, filter: FILTER_VALUE } };
-    }
-
-    if (base.indexOf("brightness-") === 0) {
-      key = base.slice(11);
-      value = theme.brightness[key];
-      if (value !== undefined) return { declarations: { "--jf-brightness": value, filter: FILTER_VALUE } };
-    }
-
-    if (base.indexOf("contrast-") === 0) {
-      key = base.slice(9);
-      value = theme.contrast[key];
-      if (value !== undefined) return { declarations: { "--jf-contrast": value, filter: FILTER_VALUE } };
-    }
-
-    if (base.indexOf("saturate-") === 0) {
-      key = base.slice(9);
-      value = theme.saturate[key];
-      if (value !== undefined) return { declarations: { "--jf-saturate": value, filter: FILTER_VALUE } };
-    }
-
-    if (base.indexOf("hue-rotate-") === 0) {
-      key = base.slice(11);
-      value = theme.hueRotate[key];
-      if (value !== undefined) {
-        if (negative) value = "-" + value;
-        return { declarations: { "--jf-hue-rotate": value, filter: FILTER_VALUE } };
-      }
-    }
-
-    if (base === "backdrop-blur") return { declarations: { "--jf-backdrop-blur": theme.blur.DEFAULT, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE } };
-    if (base.indexOf("backdrop-blur-") === 0) {
-      key = base.slice(14);
-      value = theme.blur[key];
-      if (value !== undefined) return { declarations: { "--jf-backdrop-blur": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE } };
-    }
-
-    if (base.indexOf("backdrop-brightness-") === 0) {
-      key = base.slice(20);
-      value = theme.brightness[key];
-      if (value !== undefined) return { declarations: { "--jf-backdrop-brightness": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE } };
-    }
-
-    if (base.indexOf("backdrop-contrast-") === 0) {
-      key = base.slice(18);
-      value = theme.contrast[key];
-      if (value !== undefined) return { declarations: { "--jf-backdrop-contrast": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE } };
-    }
-
-    if (base.indexOf("backdrop-opacity-") === 0) {
-      key = base.slice(17);
-      value = theme.opacity[key];
-      if (value !== undefined) return { declarations: { "--jf-backdrop-opacity": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE } };
-    }
-
-    if (base.indexOf("backdrop-saturate-") === 0) {
-      key = base.slice(18);
-      value = theme.saturate[key];
-      if (value !== undefined) return { declarations: { "--jf-backdrop-saturate": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE } };
-    }
-
-    if (base.indexOf("backdrop-hue-rotate-") === 0) {
-      key = base.slice(20);
-      value = theme.hueRotate[key];
-      if (value !== undefined) {
-        if (negative) value = "-" + value;
-        return { declarations: { "--jf-backdrop-hue-rotate": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE } };
-      }
-    }
-
-    return null;
-  }
-
-  function generatedTransitionUtility(base) {
-    var theme = config.theme;
-    var key;
-    var value;
-
-    if (base.indexOf("duration-") === 0) {
-      key = base.slice(9);
-      value = theme.transitionDuration[key] || numericMilliseconds(key);
-      if (value) return { declarations: { "transition-duration": value } };
-    }
-
-    if (base.indexOf("delay-") === 0) {
-      key = base.slice(6);
-      value = theme.transitionDuration[key] || numericMilliseconds(key);
-      if (value) return { declarations: { "transition-delay": value } };
-    }
-
-    if (base.indexOf("ease-") === 0) {
-      key = base.slice(5);
-      value = theme.transitionTiming[key];
-      if (value) return { declarations: { "transition-timing-function": value } };
-    }
-
-    return null;
-  }
-
-  function generatedTransformUtility(base, negative) {
-    var key;
-    var value;
-
-    var transformSpacing = [
-      ["translate-x", "--jf-translate-x"],
-      ["translate-y", "--jf-translate-y"]
-    ];
-
-    for (var i = 0; i < transformSpacing.length; i += 1) {
-      var prefix = transformSpacing[i][0];
-      if (base.indexOf(prefix + "-") === 0) {
-        key = base.slice(prefix.length + 1);
-        value = resolveSizeValue(key);
-        if (value !== undefined) {
-          if (negative && value !== "0px") value = "-" + value;
-          return { declarations: transformDeclaration(transformSpacing[i][1], value) };
-        }
-      }
-    }
-
-    var scaleParts = [
-      ["scale-x", "--jf-scale-x"],
-      ["scale-y", "--jf-scale-y"]
-    ];
-
-    for (var s = 0; s < scaleParts.length; s += 1) {
-      var scalePrefix = scaleParts[s][0];
-      if (base.indexOf(scalePrefix + "-") === 0) {
-        value = parseFloat(base.slice(scalePrefix.length + 1)) / 100;
-        if (!isNaN(value)) return { declarations: transformDeclaration(scaleParts[s][1], String(value)) };
-      }
-    }
-
-    if (base.indexOf("scale-") === 0) {
-      value = parseFloat(base.slice(6)) / 100;
-      if (!isNaN(value)) return { declarations: scaleDeclaration(String(value)) };
-    }
-
-    if (base.indexOf("rotate-") === 0) {
-      value = base.slice(7);
-      if (/^\d+(\.\d+)?$/.test(value)) {
-        if (negative) value = "-" + value;
-        return { declarations: rotateDeclaration(value + "deg") };
-      }
-    }
-
-    if (base.indexOf("skew-x-") === 0) {
-      value = base.slice(7);
-      if (/^\d+(\.\d+)?$/.test(value)) {
-        if (negative) value = "-" + value;
-        return { declarations: transformDeclaration("--jf-skew-x", value + "deg") };
-      }
-    }
-
-    if (base.indexOf("skew-y-") === 0) {
-      value = base.slice(7);
-      if (/^\d+(\.\d+)?$/.test(value)) {
-        if (negative) value = "-" + value;
-        return { declarations: transformDeclaration("--jf-skew-y", value + "deg") };
-      }
-    }
-
-    return null;
-  }
-
-  function resolveDynamicUtility(base, negative) {
-    if (base.charAt(0) === "[" && base.charAt(base.length - 1) === "]") {
-      var declaration = resolveArbitraryProperty(base.slice(1, -1));
-      if (declaration) return { declarations: declaration };
-    }
-
-    var dynamicPrefixes = [
-      ["backdrop-hue-rotate", function handleBackdropHue(value) { return { "--jf-backdrop-hue-rotate": signedValue(value, negative), "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["backdrop-brightness", function handleBackdropBrightness(value) { return { "--jf-backdrop-brightness": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["backdrop-contrast", function handleBackdropContrast(value) { return { "--jf-backdrop-contrast": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["backdrop-opacity", function handleBackdropOpacity(value) { return { "--jf-backdrop-opacity": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["backdrop-saturate", function handleBackdropSaturate(value) { return { "--jf-backdrop-saturate": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["backdrop-grayscale", function handleBackdropGrayscale(value) { return { "--jf-backdrop-grayscale": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["backdrop-invert", function handleBackdropInvert(value) { return { "--jf-backdrop-invert": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["backdrop-sepia", function handleBackdropSepia(value) { return { "--jf-backdrop-sepia": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["backdrop-blur", function handleBackdropBlur(value) { return { "--jf-backdrop-blur": value, "-webkit-backdrop-filter": BACKDROP_FILTER_VALUE, "backdrop-filter": BACKDROP_FILTER_VALUE }; }],
-      ["hue-rotate", function handleHue(value) { return { "--jf-hue-rotate": signedValue(value, negative), filter: FILTER_VALUE }; }],
-      ["brightness", function handleBrightness(value) { return { "--jf-brightness": value, filter: FILTER_VALUE }; }],
-      ["contrast", function handleContrast(value) { return { "--jf-contrast": value, filter: FILTER_VALUE }; }],
-      ["saturate", function handleSaturate(value) { return { "--jf-saturate": value, filter: FILTER_VALUE }; }],
-      ["grayscale", function handleGrayscale(value) { return { "--jf-grayscale": value, filter: FILTER_VALUE }; }],
-      ["invert", function handleInvert(value) { return { "--jf-invert": value, filter: FILTER_VALUE }; }],
-      ["sepia", function handleSepia(value) { return { "--jf-sepia": value, filter: FILTER_VALUE }; }],
-      ["drop-shadow", function handleDropShadow(value) { return { "--jf-drop-shadow": value, filter: FILTER_VALUE }; }],
-      ["grid-cols", function handleGridCols(value) { return { "grid-template-columns": value }; }],
-      ["grid-rows", function handleGridRows(value) { return { "grid-template-rows": value }; }],
-      ["col-start", function handleColStart(value) { return { "grid-column-start": value }; }],
-      ["col-end", function handleColEnd(value) { return { "grid-column-end": value }; }],
-      ["row-start", function handleRowStart(value) { return { "grid-row-start": value }; }],
-      ["row-end", function handleRowEnd(value) { return { "grid-row-end": value }; }],
-      ["col", function handleCol(value) { return { "grid-column": value }; }],
-      ["row", function handleRow(value) { return { "grid-row": value }; }],
-      ["translate-x", function handleTranslateX(value) { return transformDeclaration("--jf-translate-x", signedValue(value, negative)); }],
-      ["translate-y", function handleTranslateY(value) { return transformDeclaration("--jf-translate-y", signedValue(value, negative)); }],
-      ["skew-x", function handleSkewX(value) { return transformDeclaration("--jf-skew-x", signedValue(value, negative)); }],
-      ["skew-y", function handleSkewY(value) { return transformDeclaration("--jf-skew-y", signedValue(value, negative)); }],
-      ["rotate", function handleRotate(value) { return rotateDeclaration(signedValue(value, negative)); }],
-      ["scale-x", function handleScaleX(value) { return transformDeclaration("--jf-scale-x", value); }],
-      ["scale-y", function handleScaleY(value) { return transformDeclaration("--jf-scale-y", value); }],
-      ["scale", function handleScale(value) { return scaleDeclaration(value); }],
-      ["min-w", function handleMinWidth(value) { return { "min-width": signedValue(value, negative) }; }],
-      ["max-w", function handleMaxWidth(value) { return { "max-width": signedValue(value, negative) }; }],
-      ["min-h", function handleMinHeight(value) { return { "min-height": signedValue(value, negative) }; }],
-      ["max-h", function handleMaxHeight(value) { return { "max-height": signedValue(value, negative) }; }],
-      ["basis", function handleBasis(value) { return { "flex-basis": signedValue(value, negative) }; }],
-      ["ring-offset", function handleRingOffset(value) { return ringOffsetDeclaration(value); }],
-      ["ring", function handleRing(value) {
-        if (looksLikeColor(value)) return { "--jf-ring-color": value, "box-shadow": RING_BOX_SHADOW };
-        return ringWidthDeclaration(value);
-      }],
-      ["rounded", function handleRounded(value) { return { "border-radius": value }; }],
-      ["border", function handleBorder(value) {
-        if (looksLikeColor(value)) return { "border-color": value };
-        return { "border-width": value };
-      }],
-      ["outline-offset", function handleOutlineOffset(value) { return { "outline-offset": value }; }],
-      ["outline", function handleOutline(value) {
-        if (looksLikeColor(value)) return { "outline-color": value };
-        return { "outline-width": value };
-      }],
-      ["shadow", function handleShadow(value) { return { "--jf-shadow": value, "box-shadow": RING_BOX_SHADOW }; }],
-      ["aspect", function handleAspect(value) { return { "aspect-ratio": value }; }],
-      ["leading", function handleLeading(value) { return { "line-height": value }; }],
-      ["tracking", function handleTracking(value) { return { "letter-spacing": value }; }],
-      ["duration", function handleDuration(value) { return { "transition-duration": value }; }],
-      ["delay", function handleDelay(value) { return { "transition-delay": value }; }],
-      ["ease", function handleEase(value) { return { "transition-timing-function": value }; }],
-      ["transition", function handleTransition(value) { return { "transition-property": value }; }],
-      ["opacity", function handleOpacity(value) { return { opacity: value }; }],
-      ["blur", function handleBlur(value) { return { "--jf-blur": value, filter: FILTER_VALUE }; }],
-      ["z", function handleZ(value) { return { "z-index": signedValue(value, negative) }; }],
-      ["order", function handleOrder(value) { return { order: signedValue(value, negative) }; }],
-      ["size", function handleSize(value) { return { width: signedValue(value, negative), height: signedValue(value, negative) }; }],
-      ["w", function handleWidth(value) { return { width: signedValue(value, negative) }; }],
-      ["h", function handleHeight(value) { return { height: signedValue(value, negative) }; }],
-      ["p", function handlePadding(value) { return { padding: value }; }],
-      ["px", function handlePaddingX(value) { return { "padding-left": value, "padding-right": value }; }],
-      ["py", function handlePaddingY(value) { return { "padding-top": value, "padding-bottom": value }; }],
-      ["pt", function handlePaddingTop(value) { return { "padding-top": value }; }],
-      ["pr", function handlePaddingRight(value) { return { "padding-right": value }; }],
-      ["pb", function handlePaddingBottom(value) { return { "padding-bottom": value }; }],
-      ["pl", function handlePaddingLeft(value) { return { "padding-left": value }; }],
-      ["m", function handleMargin(value) { return { margin: signedValue(value, negative) }; }],
-      ["mx", function handleMarginX(value) { return { "margin-left": signedValue(value, negative), "margin-right": signedValue(value, negative) }; }],
-      ["my", function handleMarginY(value) { return { "margin-top": signedValue(value, negative), "margin-bottom": signedValue(value, negative) }; }],
-      ["mt", function handleMarginTop(value) { return { "margin-top": signedValue(value, negative) }; }],
-      ["mr", function handleMarginRight(value) { return { "margin-right": signedValue(value, negative) }; }],
-      ["mb", function handleMarginBottom(value) { return { "margin-bottom": signedValue(value, negative) }; }],
-      ["ml", function handleMarginLeft(value) { return { "margin-left": signedValue(value, negative) }; }],
-      ["gap-x", function handleGapX(value) { return { "column-gap": value }; }],
-      ["gap-y", function handleGapY(value) { return { "row-gap": value }; }],
-      ["gap", function handleGap(value) { return { gap: value }; }],
-      ["inset-x", function handleInsetX(value) { return { left: signedValue(value, negative), right: signedValue(value, negative) }; }],
-      ["inset-y", function handleInsetY(value) { return { top: signedValue(value, negative), bottom: signedValue(value, negative) }; }],
-      ["inset", function handleInset(value) { return { top: signedValue(value, negative), right: signedValue(value, negative), bottom: signedValue(value, negative), left: signedValue(value, negative) }; }],
-      ["top", function handleTop(value) { return { top: signedValue(value, negative) }; }],
-      ["right", function handleRight(value) { return { right: signedValue(value, negative) }; }],
-      ["bottom", function handleBottom(value) { return { bottom: signedValue(value, negative) }; }],
-      ["left", function handleLeft(value) { return { left: signedValue(value, negative) }; }],
-      ["bg", function handleBackground(value) {
-        if (/^(url|linear-gradient|radial-gradient|conic-gradient)\(/.test(value)) return { "background-image": value };
-        return { "background-color": value };
-      }],
-      ["bg-size", function handleBackgroundSize(value) { return { "background-size": value }; }],
-      ["bg-position", function handleBackgroundPosition(value) { return { "background-position": value }; }],
-      ["text", function handleText(value) {
-        if (looksLikeLength(value)) return { "font-size": value };
-        return { color: value };
-      }],
-      ["font", function handleFont(value) { return { "font-family": value }; }],
-      ["indent", function handleIndent(value) { return { "text-indent": signedValue(value, negative) }; }],
-      ["list", function handleList(value) { return { "list-style-type": value }; }],
-      ["object", function handleObject(value) { return { "object-fit": value }; }],
-      ["object-position", function handleObjectPosition(value) { return { "object-position": value }; }],
-      ["fill", function handleFill(value) { return { fill: value }; }],
-      ["stroke-width", function handleStrokeWidth(value) { return { "stroke-width": value }; }],
-      ["stroke", function handleStroke(value) { return { stroke: value }; }],
-      ["caret", function handleCaret(value) { return { "caret-color": value }; }],
-      ["accent", function handleAccent(value) { return { "accent-color": value }; }],
-      ["decoration", function handleDecoration(value) {
-        if (looksLikeColor(value)) return { "text-decoration-color": value };
-        return { "text-decoration-thickness": value };
-      }],
-      ["underline-offset", function handleUnderlineOffset(value) { return { "text-underline-offset": value }; }],
-      ["content", function handleContent(value) { return { content: value }; }]
-    ];
-
-    for (var i = 0; i < dynamicPrefixes.length; i += 1) {
-      var prefix = dynamicPrefixes[i][0];
-      var start = prefix + "-[";
-      if (base.indexOf(start) === 0 && base.charAt(base.length - 1) === "]") {
-        var rawValue = base.slice(start.length, -1);
-        var value = sanitizeValue(decodeInlineValue(rawValue));
-        if (value === null) return null;
-        return { declarations: dynamicPrefixes[i][1](value) };
-      }
-    }
-
-    return null;
-  }
-
-  function resolveSpacingValue(key) {
-    if (key === "auto") return "auto";
-    return resolveInlineOrThemeValue(key, config.theme.spacing);
-  }
-
-  function resolveSizeValue(key, prefix) {
-    var fixed = {
-      auto: "auto",
-      full: "100%",
-      screen: prefix && prefix.indexOf("h") !== -1 ? "100vh" : "100vw",
-      svw: "100svw",
-      lvw: "100lvw",
-      dvw: "100dvw",
-      svh: "100svh",
-      lvh: "100lvh",
-      dvh: "100dvh",
-      min: "min-content",
-      max: "max-content",
-      fit: "fit-content"
-    };
-
-    if (fixed[key]) return fixed[key];
-    if (key === "none" && prefix && prefix.indexOf("max") === 0) return "none";
-    if (key === "0") return "0px";
-
-    var spacing = resolveSpacingValue(key);
-    if (spacing !== undefined) return spacing;
-
-    var fraction = fractionToPercent(key);
-    if (fraction) return fraction;
-
-    return undefined;
-  }
-
-  function resolveInlineOrThemeValue(key, scale) {
-    if (scale && Object.prototype.hasOwnProperty.call(scale, key)) return scale[key];
-    if (/^\d+(\.\d+)?(px|rem|em|%|vh|vw|svh|svw|lvh|lvw|dvh|dvw|ch|ex|cm|mm|in|pt|pc|vmin|vmax)$/.test(key)) return key;
-    return undefined;
-  }
-
-  function resolveColorValue(rawKey) {
-    var parts = splitOutsideBrackets(rawKey, "/");
-    var key = parts[0];
-    var alpha = parts.length > 1 ? parts.slice(1).join("/") : null;
-    var color = findThemeColor(key);
-
-    if (!color && looksLikeColor(key)) color = key;
-    if (!color) return null;
-
-    if (alpha !== null) {
-      var alphaValue = alpha.charAt(0) === "[" && alpha.charAt(alpha.length - 1) === "]" ? decodeInlineValue(alpha.slice(1, -1)) : alpha;
-      color = withAlpha(color, alphaValue);
-    }
-
-    return color;
-  }
-
-  function findThemeColor(key) {
-    if (!key) return null;
-    var colors = config.theme.colors || {};
-
-    if (Object.prototype.hasOwnProperty.call(colors, key) && typeof colors[key] === "string") return colors[key];
-
-    var parts = key.split("-");
-    var current = colors;
-    for (var i = 0; i < parts.length; i += 1) {
-      if (current && Object.prototype.hasOwnProperty.call(current, parts[i])) {
-        current = current[parts[i]];
-      } else {
-        return null;
-      }
-    }
-
-    if (typeof current === "string") return current;
-    if (current && typeof current.DEFAULT === "string") return current.DEFAULT;
-    return null;
-  }
-
-  function withAlpha(color, alpha) {
-    var value = String(alpha).trim();
-    var number = value;
-
-    if (/^\d+(\.\d+)?$/.test(value)) {
-      var parsed = parseFloat(value);
-      number = parsed > 1 ? parsed / 100 : parsed;
-    }
-
-    if (String(number).indexOf("%") !== -1) {
-      number = parseFloat(number) / 100;
-    }
-
-    var rgb = hexToRgb(color);
-    if (rgb) return "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + "," + number + ")";
-
-    return "color-mix(in srgb," + color + " " + (parseFloat(number) * 100) + "%,transparent)";
-  }
-
-  function hexToRgb(color) {
-    var hex = String(color).trim();
-    var short = /^#([0-9a-f]{3})$/i.exec(hex);
-    if (short) {
-      return {
-        r: parseInt(short[1].charAt(0) + short[1].charAt(0), 16),
-        g: parseInt(short[1].charAt(1) + short[1].charAt(1), 16),
-        b: parseInt(short[1].charAt(2) + short[1].charAt(2), 16)
-      };
-    }
-
-    var full = /^#([0-9a-f]{6})$/i.exec(hex);
-    if (full) {
-      return {
-        r: parseInt(full[1].slice(0, 2), 16),
-        g: parseInt(full[1].slice(2, 4), 16),
-        b: parseInt(full[1].slice(4, 6), 16)
-      };
-    }
-
-    return null;
-  }
-
-  function looksLikeColor(value) {
-    return /^(#|rgb\(|rgba\(|hsl\(|hsla\(|lab\(|lch\(|oklab\(|oklch\(|color\(|var\(|currentColor$|transparent$|inherit$|initial$|unset$)/i.test(value) ||
-      /^(black|white|red|green|blue|yellow|orange|purple|pink|gray|grey|slate|cyan|teal|violet|indigo|rose|brown)$/i.test(value);
-  }
-
-  function looksLikeLength(value) {
-    return /^(calc\(|clamp\(|min\(|max\(|var\()/.test(value) || /^-?\d+(\.\d+)?(px|rem|em|%|vh|vw|svh|svw|lvh|lvw|dvh|dvw|ch|ex|cm|mm|in|pt|pc|vmin|vmax)$/.test(value);
-  }
-
-  function numericValue(key) {
-    if (/^-?\d+(\.\d+)?$/.test(key)) return key;
-    return undefined;
-  }
-
-  function numericMilliseconds(key) {
-    if (/^\d+(\.\d+)?$/.test(key)) return key + "ms";
-    return null;
-  }
-
-  function fractionToPercent(key) {
-    var match = /^(\d+)\/(\d+)$/.exec(key);
-    if (!match) return null;
-    var denominator = parseFloat(match[2]);
-    if (!denominator) return null;
-    return (parseFloat(match[1]) / denominator * 100) + "%";
-  }
-
-  function decodeInlineValue(value) {
-    return String(value)
-      .replace(/\\_/g, "\u0000")
-      .replace(/_/g, " ")
-      .replace(/\u0000/g, "_")
-      .replace(/\\,/g, ",");
-  }
-
-  function sanitizeValue(value) {
-    if (value === null || value === undefined) return null;
-
-    var safe = String(value).trim();
-    if (!safe) return null;
-
-    if (/[<>"';{}]/.test(safe)) return null;
-    if (/(?:url\s*\(|javascript\s*:|data\s*:)/i.test(safe)) return null;
-    if (!hasBalancedParentheses(safe)) return null;
-    if (!hasOnlySafeValueCharacters(safe)) return null;
-    if (!hasOnlyAllowedFunctions(safe)) return null;
-
-    return safe;
-  }
-
-  function hasBalancedParentheses(value) {
-    var depth = 0;
-    for (var i = 0; i < value.length; i += 1) {
-      var char = value.charAt(i);
-      if (char === "(") depth += 1;
-      if (char === ")") {
-        depth -= 1;
-        if (depth < 0) return false;
-      }
-    }
-    return depth === 0;
-  }
-
-  function hasOnlySafeValueCharacters(value) {
-    return /^[#.,%()\s+\-*/0-9A-Za-z_]+$/.test(value);
-  }
-
-  function hasOnlyAllowedFunctions(value) {
-    var allowed = {
-      calc: true,
-      rgb: true,
-      rgba: true,
-      hsl: true,
-      hsla: true
-    };
-    var functionPattern = /([A-Za-z-]+)\s*\(/g;
-    var match;
-    while ((match = functionPattern.exec(value))) {
-      if (!allowed[match[1].toLowerCase()]) return false;
-    }
-    return true;
-  }
-
-  function resolveArbitraryProperty(value) {
-    var decoded = decodeInlineValue(value);
-    var splitAt = findDeclarationSeparator(decoded);
-    if (splitAt <= 0) return null;
-
-    var property = decoded.slice(0, splitAt).trim();
-    var propertyValue = sanitizeValue(decoded.slice(splitAt + 1).trim());
-    if (!isSafeCssProperty(property) || !propertyValue) return null;
-
-    var declarations = {};
-    declarations[property] = propertyValue;
-    return declarations;
-  }
-
-  function findDeclarationSeparator(value) {
-    var bracketDepth = 0;
-    var parenDepth = 0;
-    var quote = "";
-
-    for (var i = 0; i < value.length; i += 1) {
-      var char = value.charAt(i);
-      if (quote) {
-        if (char === quote && value.charAt(i - 1) !== "\\") quote = "";
-        continue;
-      }
-      if (char === "\"" || char === "'") {
-        quote = char;
-        continue;
-      }
-      if (char === "[") bracketDepth += 1;
-      if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1);
-      if (char === "(") parenDepth += 1;
-      if (char === ")") parenDepth = Math.max(0, parenDepth - 1);
-      if (char === ":" && bracketDepth === 0 && parenDepth === 0) return i;
-    }
-
-    return -1;
-  }
-
-  function isSafeCssProperty(property) {
-    return /^--[A-Za-z0-9_-]+$/.test(property) || /^-?[A-Za-z][A-Za-z0-9-]*$/.test(property);
-  }
-
-  function propsToValue(props, value) {
-    var output = {};
-    for (var i = 0; i < props.length; i += 1) output[props[i]] = value;
-    return output;
-  }
-
-  function signedValue(value, negative) {
-    if (!negative) return value;
-    if (String(value).charAt(0) === "-") return String(value).slice(1);
-    if (/^calc\(/.test(value)) return "calc(" + value.slice(5, -1) + " * -1)";
-    if (value === "0" || value === "0px") return value;
-    return "-" + value;
-  }
-
-  function ringWidthDeclaration(value) {
-    return {
-      "--jf-ring-shadow": "var(--jf-ring-inset,) 0 0 0 calc(" + value + " + var(--jf-ring-offset-width,0px)) var(--jf-ring-color,rgb(59 130 246 / 0.5))",
-      "box-shadow": RING_BOX_SHADOW
-    };
-  }
-
-  function ringOffsetDeclaration(value) {
-    return {
-      "--jf-ring-offset-width": value,
-      "--jf-ring-offset-color": "var(--jf-ring-offset-color,#fff)",
-      "--jf-ring-offset-shadow": "var(--jf-ring-inset,) 0 0 0 var(--jf-ring-offset-width,0px) var(--jf-ring-offset-color,#fff)",
-      "box-shadow": RING_BOX_SHADOW
-    };
-  }
-
-  function transformDeclaration(prop, value) {
-    var declarations = {};
-    declarations[prop] = value;
-    declarations.transform = TRANSFORM_VALUE;
-    return declarations;
-  }
-
-  function scaleDeclaration(value) {
-    return {
-      "--jf-scale-x": value,
-      "--jf-scale-y": value,
-      transform: TRANSFORM_VALUE
-    };
-  }
-
-  function rotateDeclaration(value) {
-    return transformDeclaration("--jf-rotate", value);
-  }
-
-  function negateUtility(declarations) {
-    var output = {};
-    Object.keys(declarations).forEach(function negateDeclaration(prop) {
-      output[prop] = signedValue(declarations[prop], true);
-    });
-    return output;
-  }
-
-  function cloneUtility(utility) {
-    return deepClone(utility);
-  }
-
-  function normalizeCustomUtility(value) {
-    if (typeof value === "string") {
-      var trimmed = value.trim();
-      if (!trimmed) return null;
-      if (looksLikeCssDeclarationBlock(trimmed)) return { declarations: trimmed };
-      return { aliasTokens: expandApplyClassValue(trimmed) };
-    }
-    if (typeof value === "function") return normalizeCustomUtility(value(config));
-    if (Array.isArray(value)) {
-      var aliasTokens = [];
-      flattenToArray(value).forEach(function addAliasArrayToken(item) {
-        if (typeof item === "string") aliasTokens = aliasTokens.concat(expandApplyClassValue(item));
-      });
-      return { aliasTokens: aliasTokens };
-    }
-    if (value && value.rules) return value;
-    if (value && value.declarations) return value;
-    if (value && value.aliasTokens) return value;
-    if (value && typeof value === "object") return { declarations: value };
-    return null;
-  }
-
-  function looksLikeCssDeclarationBlock(value) {
-    return value.indexOf("{") !== -1 || value.indexOf(";") !== -1 || /^\s*(--[A-Za-z0-9_-]+|[A-Za-z-]+)\s*:\s+/.test(value);
-  }
-
-  function createConfig(userConfig) {
-    var input = userConfig || {};
-    var merged = deepMerge(deepClone(DEFAULT_CONFIG), input);
-    if (input.theme && input.theme.extend) {
-      delete merged.theme.extend;
-      merged.theme = deepMerge(deepClone(merged.theme), input.theme.extend);
-    }
-    return merged;
+    ruleSet.clear();
+    warnedTokens.clear();
+    JetFlow.config = config;
   }
 
   function deepMerge(target) {
-    for (var i = 1; i < arguments.length; i += 1) {
-      var source = arguments[i];
-      if (!source || typeof source !== "object") continue;
-      Object.keys(source).forEach(function mergeKey(key) {
-        var value = source[key];
-        if (Array.isArray(value)) {
-          target[key] = value.slice();
-        } else if (value && typeof value === "object") {
-          if (!target[key] || typeof target[key] !== "object" || Array.isArray(target[key])) target[key] = {};
-          target[key] = deepMerge(target[key], value);
+    for (var i = 1; i < arguments.length; i++) {
+      var src = arguments[i];
+      if (!src || typeof src !== "object") continue;
+      var keys = Object.keys(src);
+      for (var k = 0; k < keys.length; k++) {
+        var key = keys[k], val = src[key];
+        if (Array.isArray(val)) {
+          target[key] = val.slice();
+        } else if (val && typeof val === "object" && !Array.isArray(val)) {
+          if (!target[key] || typeof target[key] !== "object") target[key] = {};
+          deepMerge(target[key], val);
         } else {
-          target[key] = value;
+          target[key] = val;
         }
-      });
+      }
     }
     return target;
   }
 
-  function deepClone(value) {
-    if (Array.isArray(value)) return value.map(deepClone);
-    if (value && typeof value === "object") {
-      var output = {};
-      Object.keys(value).forEach(function cloneKey(key) {
-        output[key] = deepClone(value[key]);
+  function deepClone(v) {
+    if (Array.isArray(v)) return v.map(deepClone);
+    if (v && typeof v === "object") {
+      var o = {};
+      var keys = Object.keys(v);
+      for (var i = 0; i < keys.length; i++) o[keys[i]] = deepClone(v[keys[i]]);
+      return o;
+    }
+    return v;
+  }
+
+  function warnToken(token, msg) {
+    if (!config.debug) return;
+    var key = token + "::" + msg;
+    if (warnedTokens.has(key)) return;
+    warnedTokens.add(key);
+    if (global.console && global.console.warn) global.console.warn("[JetFlow] Ignored \"" + token + "\": " + msg);
+  }
+
+  // ─── UNIQUE FEATURES ──────────────────────────────────────────────────────
+
+  // 1. Runtime theme switching: Jetflow.setTheme({...})
+  //    Injects/updates CSS vars on :root without page reload.
+  function setTheme(themeOverrides) {
+    if (!themeOverrides || typeof themeOverrides !== "object") return JetFlow;
+    deepMerge(config.theme, themeOverrides);
+    // Extend color vars
+    ensureStyle();
+    var themeVarEl = document.getElementById("jf-theme-vars");
+    if (!themeVarEl) {
+      themeVarEl = document.createElement("style");
+      themeVarEl.id = "jf-theme-vars";
+      (document.head || document.documentElement).appendChild(themeVarEl);
+    }
+    var css = ":root{";
+    if (themeOverrides.colors) {
+      flattenColors(themeOverrides.colors, "--jf-color-", function(k, v) { css += k + ":" + v + ";"; });
+    }
+    // Allow arbitrary CSS variable overrides via theme.vars
+    if (themeOverrides.vars && typeof themeOverrides.vars === "object") {
+      var vkeys = Object.keys(themeOverrides.vars);
+      for (var i = 0; i < vkeys.length; i++) {
+        var propName = startsWith(vkeys[i], "--") ? vkeys[i] : "--jf-" + vkeys[i];
+        css += propName + ":" + themeOverrides.vars[vkeys[i]] + ";";
+      }
+    }
+    css += "}";
+    themeVarEl.textContent = css;
+    // Bust cache and re-flush
+    tokenCache.clear();
+    ruleSet.clear();
+    scanDOM();
+    flush();
+    return JetFlow;
+  }
+
+  // 2. Dev inspect: Jetflow.inspect(element)
+  //    Logs parsed classes and generated CSS for each class on an element.
+  function inspect(el) {
+    if (!el || el.nodeType !== 1) {
+      console.warn("[JetFlow] inspect() requires a DOM element.");
+      return;
+    }
+    var cls = el.getAttribute("class") || "";
+    var scopePrefix = getScopePrefix(cls);
+    var tokens = splitClasses(cls).filter(function(t) { return !SCOPE_RE.test(t); });
+
+    console.group("[JetFlow] inspect(" + (el.tagName || "?").toLowerCase() + (el.id ? "#" + el.id : "") + ")");
+    console.log("Scope prefix:", scopePrefix || "(none)");
+    console.log("Classes:", tokens);
+    for (var i = 0; i < tokens.length; i++) {
+      var t = tokens[i];
+      var parsed = parseToken(t);
+      var css = compileToken(t, null, scopePrefix) || "(no output)";
+      console.group("." + t);
+      console.log("Parsed:", {
+        raw:       parsed.raw,
+        variants:  parsed.variants,
+        utility:   parsed.utility,
+        value:     parsed.value,
+        important: parsed.important
       });
-      return output;
+      console.log("CSS output:\n" + css);
+      console.groupEnd();
     }
-    return value;
+    console.groupEnd();
+    return tokens.map(function(t) {
+      return {token: t, parsed: parseToken(t), css: compileToken(t, null, scopePrefix) || ""};
+    });
   }
 
-  function flattenToArray(value) {
-    if (!value) return [];
-    if (Array.isArray(value)) {
-      return value.reduce(function flatten(result, item) {
-        return result.concat(flattenToArray(item));
-      }, []);
+  // ─── PUBLIC API ────────────────────────────────────────────────────────────
+
+  var JetFlow = {
+    version: VERSION,
+    config: config,
+
+    // Lifecycle
+    start: start,
+    stop: stop,
+    refresh: function() { scanDOM(); flush(); return JetFlow; },
+    scan: function() { scanDOM(); flush(); return JetFlow; },
+
+    // Config
+    configure: function(cfg) { applyConfig(deepMerge(deepClone(config), cfg || {})); if (started) { scanDOM(); flush(); } return JetFlow; },
+    init: function(cfg) { applyConfig(cfg); if (started) { scanDOM(); flush(); } return JetFlow; },
+
+    // Unique features
+    setTheme: setTheme,
+    inspect:  inspect,
+
+    // Low-level access
+    parseToken: parseToken,
+    compileClass: function(token) { return compileToken(token, null, null); },
+    clearCache: function() { tokenCache.clear(); ruleSet.clear(); return JetFlow; },
+
+    // Parser module (matches required interface)
+    parser: {
+      parse: parseToken,
+      // Returns: { variants: string[], utility: string, value: string, important: bool, raw: string }
+      parseChained: function(token) {
+        var p = parseToken(token);
+        return {
+          variants:  p.variants,   // ordered: media → pseudo
+          utility:   p.utility,
+          value:     p.value,
+          important: p.important,
+          raw:       p.raw
+        };
+      },
+      splitClasses: splitClasses,
+      splitOutside: splitOutside
     }
-    return [value];
+  };
+
+  // ─── BOOT ──────────────────────────────────────────────────────────────────
+
+  applyConfig(
+    typeof _userConfig !== "undefined" ? _userConfig :
+    (global.jetflowConfig || {})
+  );
+
+  global.JetFlow = JetFlow;
+
+  // Auto-start on DOMContentLoaded (or immediately if already loaded)
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function() { start(); }, {once: true});
+  } else {
+    start();
   }
 
-  function cssEscape(value) {
-    if (global.CSS && typeof global.CSS.escape === "function") return global.CSS.escape(value);
-    return String(value).replace(/^[0-9]/, "\\3$& ").replace(/^-?[0-9]/, "\\3$& ").replace(/[^a-zA-Z0-9_-]/g, "\\$&");
-  }
-
-  function buildAttributeSelector(attributeName, value) {
-    var attr = attributeName === "data-jetflow" ? "data-jetflow" : "class";
-    return "[" + attr + "*=\"" + cssAttributeEscape(value) + "\"]";
-  }
-
-  function cssAttributeEscape(value) {
-    return String(value).replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
-  }
-
-  function escapeAttributeName(value) {
-    return String(value).replace(/[^a-zA-Z0-9_-]/g, "");
-  }
-
-  function isJetFlowStyleNode(node) {
-    return !!(node && node.nodeType === 1 && node.tagName && String(node.tagName).toLowerCase() === "style" &&
-      (node.getAttribute("type") === "text/jetflow" || (node.hasAttribute && node.hasAttribute("data-jetflow-apply"))));
-  }
-
-  function warnInvalidToken(token, message) {
-    if (!config.debug || !global.console || !global.console.warn) return;
-    var key = token + "::" + message;
-    if (invalidTokenWarnings.has(key)) return;
-    invalidTokenWarnings.add(key);
-    global.console.warn("[JetFlow] Ignored class \"" + token + "\": " + message);
-  }
-
-  function ready(callback) {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", callback, { once: true });
-    } else {
-      callback();
-    }
-  }
-})(typeof window !== "undefined" ? window : this, typeof document !== "undefined" ? document : null);
+})(typeof window !== "undefined" ? window : this,
+   typeof document !== "undefined" ? document : null);
