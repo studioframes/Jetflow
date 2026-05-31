@@ -22,7 +22,7 @@ With the release of **v1.0.1**, Jetflow introduces a next-generation engine that
 
 Include the compiled file in your document `<head>`:
 ```html
-<script src="https://cdn.jsdelivr.net/gh/JetflowJS/Jetflow@v1.0.1/jetflow.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/studioframes/Jetflow@v1.0.1/jetflow.js"></script>
 ```
 
 ## Basic Usage & Chained Variants
