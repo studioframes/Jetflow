@@ -2,7 +2,8 @@
 
 Jetflow is a browser-based styling engine that combines readable CSS-like syntax with utility-driven speed. It allows you to build modern interfaces without writing traditional CSS files while keeping the syntax intuitive. Drop in one script tag, write atomic classes in HTML, and ship. No build step, no configuration required.
 
-<img width="1280" height="640" alt="gh" src="https://github.com/user-attachments/assets/666496df-0609-4186-a64f-3f87f3a7e045" />
+## Jetflow is now deprecated
+Jetflow is no longer maintained. You can still use it in your projects but no new vulnerabilities will be fixed. So use it as your own risk. This repository is readonly and does not accept issues or PRs.
 
 ## Overview
 
